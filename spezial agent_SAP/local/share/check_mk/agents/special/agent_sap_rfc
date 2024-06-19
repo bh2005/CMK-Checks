@@ -1,0 +1,93 @@
+#!/usr/bin/python3
+
+from curses import echo
+import sys
+from pyrfc import Connection
+
+def get_function_module_status(conn, func):
+    # Call the function module
+    result = conn.call(func)
+
+    # Return the status
+    return result
+
+# Check if the correct number of command line arguments is provided
+if len(sys.argv) != 7:
+    print("Usage: python sap_connection.py <ashost> <sysnr> <client> <user> <passwd> <function_module>")
+    sys.exit(1)
+
+# Extract the connection parameters from the command line arguments
+ashost = sys.argv[1]
+sysnr = sys.argv[2]
+client = sys.argv[3]
+user = sys.argv[4]
+passwd = sys.argv[5]
+function_module = sys.argv[6]
+
+# Define the connection parameters
+conn_params = {
+    'ashost': ashost,
+    'sysnr': sysnr,
+    'client': client,
+    'user': user,
+    'passwd': passwd
+}
+
+# Establish the connection
+conn = Connection(**conn_params)
+
+# Call the function module and get the status
+status = get_function_module_status(conn, function_module)
+
+## Print the status
+#print(status)
+#message=(status)
+## Drucken Sie die Elemente der Nachricht
+#print("Message Type:", message['MESSAGE']['TYPE'])
+#print("Message ID:", message['MESSAGE']['ID'])
+#print("Message Number:", message['MESSAGE']['NUMBER'])
+#print("Message Text:", message['MESSAGE']['MESSAGE'])
+#print("Log Number:", message['MESSAGE']['LOG_NO'])
+#print("Log Message Number:", message['MESSAGE']['LOG_MSG_NO'])
+#print("Message V1:", message['MESSAGE']['MESSAGE_V1'])
+#print("Message V2:", message['MESSAGE']['MESSAGE_V2'])
+#print("Message V3:", message['MESSAGE']['MESSAGE_V3'])
+#print("Message V4:", message['MESSAGE']['MESSAGE_V4'])
+#print("Parameter:", message['MESSAGE']['PARAMETER'])
+#print("Row:", message['MESSAGE']['ROW'])
+#print("Field:", message['MESSAGE']['FIELD'])
+#print("System:", message['MESSAGE']['SYSTEM'])
+#print("Return Code:", message['RETURNCODE'])
+#
+## Drucken Sie die Elemente der Nachrichtentabelle
+#for i, tab in enumerate(message['MESSAGE_TAB']):
+#    print(f"Message Tab {i+1}:")
+#    print("\tType:", tab['TYPE'])
+#    print("\tID:", tab['ID'])
+#    print("\tNumber:", tab['NUMBER'])
+#    print("\tMessage:", tab['MESSAGE'])
+#    print("\tLog Number:", tab['LOG_NO'])
+#    print("\tLog Message Number:", tab['LOG_MSG_NO'])
+#    print("\tMessage V1:", tab['MESSAGE_V1'])
+#    print("\tMessage V2:", tab['MESSAGE_V2'])
+#    print("\tMessage V3:", tab['MESSAGE_V3'])
+#    print("\tMessage V4:", tab['MESSAGE_V4'])
+#    print("\tParameter:", tab['PARAMETER'])
+#    print("\tRow:", tab['ROW'])
+#    print("\tField:", tab['FIELD'])
+#    print("\tSystem:", tab['SYSTEM'])
+#
+
+
+if status['RETURNCODE'] == 2:
+    print("0 \" System: \"", status['MESSAGE']['SYSTEM']," , ", status ['MESSAGE']['MESSAGE'],)
+    OUTPUT=(status['RETURNCODE'] ,"OK" ,status['MESSAGE']['SYSTEM'],status ['MESSAGE']['MESSAGE'],ashost,)
+elif status['RETURNCODE'] == 0:
+    print("2 - CRITICAL - Batchman not running on $ashost")
+    OUTPUT=(status['RETURNCODE'] ,"CRITICAL" ," Batchman not running on",ashost,)
+    
+    
+print("<<<sap_pyrfc_batchman>>>")
+print (OUTPUT)
+
+sys.exit(status['RETURNCODE'])

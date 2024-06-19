@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+uid=$1;
+pwd=$2;
+url=$3;
+test=$4;
+
+OUTPUT=$(curl -v -X GET -u $uid:$pwd "$url")
+do_something_with $OUTPUT;
+
+echo "<<<my_rest_api>>>"
+echo $OUTPUT
