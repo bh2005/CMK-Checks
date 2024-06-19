@@ -85,6 +85,13 @@ elif status['RETURNCODE'] == 0:
     print("2 - CRITICAL - Batchman not running on $ashost")
     OUTPUT=(status['RETURNCODE'] ,"CRITICAL" ," Batchman not running on",ashost,)
     
+# <<<sap_pyrfc_batchman>>>
+# (2, 'CRITICAL', ' Batchman not running on', 'instance.hec.XXX.net')
+
+# <<<sap_pyrfc_batchman>>>
+# (0, 'OK', 'KS_H11_003', 'BatchMan Release 5.0.4.1', 'instance.hec.XXX.net')
+
+
     
 print("<<<sap_pyrfc_batchman>>>")
 print (OUTPUT)
