@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+# def agent_my_rest_api_arguments(params, hostname, ipaddress):
+#     args = []
+#     args.append(params['uid'])
+#     args.append(params['pwd'])
+#     args.append(params['url'])
+#     args.append('--test')
+#     return args
+
+# special_agent_info['my_rest_api'] = agent_my_rest_api_arguments
+
+# # Extract the connection parameters from the command line arguments
+# ashost = sys.argv[1]
+# sysnr = sys.argv[2]
+# client = sys.argv[3]
+# user = sys.argv[4]
+# passwd = sys.argv[5]
+# function_module = sys.argv[6]
+
+def agent_sap_rfc_arguments(params):
+    args = []
+    args.append(params['ashost'])
+    args.append(params['sysnr'])
+    args.append(params['client'])
+    args.append(params['user'])
+    args.append(params['passwd'])
+    args.append(params['function_module']) 
+    return args
+
+special_agent_info['sap_rfc'] = agent_sap_rfc_arguments
