@@ -7,15 +7,9 @@
 # URL   : https://thl-cmk.hopto.org
 # Date  : 2016-04-08
 #
-# inventory of cisco wlc aps
+# inventory of extreme vx9000 wlc aps
 #
-# 2016-08-22: removed index column
-# 2018-08-04: changed scan function, code cleanup
-# 2018-09-04: changes for CMK 1.5.x (inv_tree --> inv_tree_list)
-# 2020-03-15: added support for CMK1.6x
-# 2021-07-11: rewritten for CMK 2.0
-# 2021-07-15: added support for Catalyst 9800 Controllers
-# 2023-06-07: moved gui files to ~/local/lib/chek_mk/gui/plugins/...
+# 2024-10-01 rewrite by bh2005
 
 from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     register,
@@ -222,7 +216,7 @@ def _render_ip_address(bytestring):
     return '.'.join(['%s' % ord(m) for m in bytestring])
 
 
-def parse_inv_cisco_wlc_aps_lwap(string_table: StringTable):
+def parse_inv_extreme_wlc_aps_lwap(string_table: StringTable):
     aps = []
 
     for ap in string_table:
@@ -298,7 +292,7 @@ def parse_inv_cisco_wlc_aps_lwap(string_table: StringTable):
     return aps
 
 
-def inventory_cisco_wlc_aps_lwap(params, section) -> InventoryResult:
+def inventory_extreme_wlc_aps_lwap(params, section) -> InventoryResult:
     removecolumns = []
 
     if params:
@@ -336,78 +330,54 @@ def inventory_cisco_wlc_aps_lwap(params, section) -> InventoryResult:
 
 
 register.snmp_section(
-    name='inv_cisco_wlc_aps_lwap',
-    parse_function=parse_inv_cisco_wlc_aps_lwap,
-    fetch=SNMPTree(
-        base='.1.3.6.1.4.1.9.9.513.1.1.1.1',  # CISCO-LWAPP-AP-MIB::cLApEntry
-        oids=[
-            '2',  # cLApIfMacAddress (2)
-            '3',  # cLApMaxNumberOfDot11Slots (3)
-            '5',  # cLApName (5)
-            '9',  # cLApMaxNumberOfEthernetSlots (9)
-            '10',  # cLApPrimaryControllerAddressType (10)
-            '11',  # cLApPrimaryControllerAddress (11)
-            '12',  # cLApSecondaryControllerAddressType (12)
-            '13',  # cLApSecondaryControllerAddress (13)
-            '14',  # cLApTertiaryControllerAddressType (14)
-            '15',  # cLApTertiaryControllerAddress (15)
-            '16',  # cLApLastRebootReason (16)
-            '18',  # cLApEncryptionEnable (18)
-            '19',  # cLApFailoverPriority (19)
-            '20',  # cLApPowerStatus (20)
-            '21',  # cLApTelnetEnable (21)
-            '22',  # cLApSshEnable (22)
-            '23',  # cLApPreStdStateEnabled (23)
-            '24',  # cLApPwrInjectorStateEnabled (24)
-            '25',  # cLApPwrInjectorSelection (25)
-            '26',  # cLApPwrInjectorSwMacAddr (26)
-            '27',  # cLApWipsEnable (27)
-            '28',  # cLApMonitorModeOptimization (28)
-            '32',  # cLApAMSDUEnable (32)
-            '33',  # cLApEncryptionSupported (33)
-            '34',  # cLApRogueDetectionEnabled (34)
-            '35',  # cLApTcpMss (35)
-            '36',  # cLApDataEncryptionStatus (36)
-            '38',  # cLApAdminStatus (38)
-            '39',  # cLApPortNumber (39)
-
-            '42',  # cLApVenueConfigVenueGroup
-            '43',  # cLApVenueConfigVenueType
-            '44',  # cLApVenueConfigVenueName
-            '45',  # cLApVenueConfigLanguage
-            '46',  # cLApLEDState
-            '47',  # cLApTrunkVlan
-            '48',  # cLApTrunkVlanStatus
-            '49',  # cLApLocation
-            '50',  # cLApSubMode
-            '53',  # cLApRealTimeStatsModeEnabled
-            '59',  # cLApUpgradeFromVersion
-            '60',  # cLApUpgradeToVersion
-            '61',  # cLApUpgradeFailureCause
-            '62',  # cLApMaxClientLimitNumberTrap
-            '63',  # cLApMaxClientLimitCause
-            '64',  # cLApMaxClientLimitSet
-            '65',  # cLApFloorLabel
-            '69',  # cLAdjChannelRogueEnabled
-            '74',  # cLApSysNetId
-            '76',  # cLApAntennaBandMode
-            '80',  # cLApModuleInserted
-            '81',  # cLApEnableModule
-            '82',  # cLApIsUniversal
-            '83',  # cLApUniversalPrimeStatus
-            '84',  # cLApIsMaster
-            '85',  # cLApBleFWDownloadStatus
-        ]
-    ),
-    detect=any_of(
-        contains('.1.3.6.1.2.1.1.1.0', 'Cisco Controller'),  # sysDescr
-        contains('.1.3.6.1.2.1.1.1.0', 'C9800 Software'),  # sysDescr
-    )
+    name='inv_extreme_wlc_aps_lwap',
+    parse_function=parse_inv_extreme_wlc_aps_lwap,
+    fetch=[
+        SNMPTree(
+            base='.1.3.6.1.4.1.388.50.1.4.2.1.1',  # wingStatsDevEntry
+            oids=[
+                OIDEnd(),
+                OIDBytes('1'),  # wingStatsDevMac
+                '2',  # wingStatsDevType
+                '3',  # wingStatsDevHostname
+                '4',  # wingStatsDevVersion
+                '5',  # wingStatsDevSerialNo
+                '6',  # wingStatsDevRfDomainName
+                '7',  # wingStatsDevOnline
+            ]
+        ),
+        SNMPTree(
+            base='.1.3.6.1.4.1.388.50.1.4.2.25.1.1.1',  # wingStatsDevWIApInfoEntry
+            oids=[
+                OIDEnd(),
+                '11',  # wingStatsDevWIApInfoLocation
+                '13',  # wingStatsDevWIApInfoIp
+            ]
+        ),
+        SNMPTree(
+            base='.1.3.6.1.4.1.388.50.1.4.2.4.1.1',  # wingStatsDevSysEntry
+            oids=[
+                OIDEnd(),
+                '14',  # wingStatsDevSysUptime
+            ]
+        ),
+        SNMPTree(
+            base='.1.3.6.1.4.1.388.50.1.4.2.25.9.1.1',  # wingStatsDevWlRadioEntry
+            oids=[
+                OIDEnd(),
+                OIDBytes('2'),  # wingStatsDevWIRadioDeviceMac
+                '3',  # wingStatsDevWIRadioAlias
+                OIDBytes('4'),  # wingStatsDevWIRadioMac
+                '15',  # wingStatsDevWIRadioNumClient
+            ]
+        ),
+    ],
+    detect=startswith('.1.3.6.1.2.1.1.1.0', 'VX9000')
 )
 
 register.inventory_plugin(
-    name='inv_cisco_wlc_aps_lwap',
-    inventory_function=inventory_cisco_wlc_aps_lwap,
+    name='inv_extreme_vx_wlc_aps',
+    inventory_function=inventory_extreme_vx_wlc_aps,
     inventory_default_parameters={},
-    inventory_ruleset_name='inv_cisco_wlc_aps_lwap',
+    inventory_ruleset_name='inv_extreme_vx_wlc_aps',
 )
