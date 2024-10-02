@@ -7,28 +7,8 @@
 # URL   : https://thl-cmk.hopto.org
 # Date  : 2016-04-03
 #
-# 2016-04-03: rewrite of the original cmk 1.x check by Th.L.
-# 2016-05-24: added admin/operational state, fix for missing ap_name parameter
-# 2016-07-01: added long output
-# 2016-07-06: fixed: missing ap
-# 2018-01-05: cosmetic changes, added metrics/cisco_wlc.py
-# 2018-05-23: changed scan function, changed return values to yield
-#             code cleanup, removed unused oid's
-# 2018-07-26: added code for incomplete ap data (missing lwap, data)
-# 2018-08-03: changed cdp info: short interface name, dropped neighbor domain name, added S/N and Model to longoutput
-# 2018-09-14: fixed issue with missing AP, fixed issue with SSH check
-# 2021-07-16: rewrite for CMK 2.0
-# 2021-07-17: added basic support for IOS-XE based WLAN controllers (C9800 family), without most of perfdata
-#             fixed _render_mac_address/_render_ip_address, code cleanup, removed WIPS check
-#             added lwap_uptime/time taken to join. changed perfdata to 1/s
-# 2021-07-29: fix missing data from discovery (inv_ap_info)
-# 2022-03-07: fixed handling of missing AP (THX to andreas[dot]doehler[at]gmail[dot]com)
-# 2022-04-01: added RADIO MAC address
-# 2022-05-31: removed "Software" from snmp detect function
-# 2022-10-23: fixed warning on upgrade "non-empty params vanished" for inv_ap_info
-# 2023-02-21: added cluster function (backport from check_mk) THX to roger[dot]ellenberger[at]wagner[dot]ch
-# 2023-02-21: moved gui files from ~/local/share/check_mk/... to ~/local/lib/check_mk...
-# 2023-06-07: fixed ValueError (not enough values to unpack (expected 3, got 1)) in parse function (string_table)
+# 2024-10-01 rewrite for Extreme VX9000 by bh2005
+
 import re
 from datetime import datetime, timedelta
 from time import time
@@ -50,8 +30,13 @@ from cmk.base.plugins.agent_based.agent_based_api.v1 import (
     OIDEnd,
     Result,
     State,
+    Metric,
+    GetRateError,
+    get_value_store,
+    IgnoreResultsError,
 
 )
+
 
 
 @dataclass
@@ -76,7 +61,7 @@ class RadioInfo:
     device_mac_address: str
     alias: str
     mac_address: str
-    num_clients: int
+    num_clients: Optional[int] = None
 
 
 @dataclass
@@ -310,9 +295,16 @@ def check_extreme_wlc(item, params, section: Section) -> CheckResult:
             summary=f'AP {item} not found in SNMP data. For more information see check details (long output)',
         )
         return
-
+#*********SUMARY**************************************
     device_info = ap.device_info
+    yield Result(state=State.OK, summary=f'  Radio MAC address: {ap.radio_info.mac_address}')
+    yield Result(state=State.OK, summary=f'  Clients: {ap.radio_info.num_clients}')
+    num_clients=int(ap.radio_info.num_clients)
+
+    
+    
     uptime_info = ap.uptime_info.uptime
+#*********SUMARY**************************************
     if uptime_info:
         time_diff = str_to_timedelta(uptime_info)
 
@@ -329,9 +321,19 @@ def check_extreme_wlc(item, params, section: Section) -> CheckResult:
             metric_name='extreme_wlc_uptime_seconds',
         )
 
+# perfdata (plain)
+    for key, value, bounderies in [
+        ('active_client_count', num_clients, (0, None)),
+        #('associated_clients', lwap_info.ap_associatedclientcount, (0, None)),
+    ]:
+        if value:
+            yield Metric(name=f'extreme_wlc_{key}', value=value, boundaries=bounderies)
+
+    
     yield Result(state=State.OK, notice=f'\nBase data:')
     yield Result(state=State.OK, notice=f' - IP address: {ap.ap_info.ip_address}')
     yield Result(state=State.OK, notice=f' - Device MAC address: {ap.device_info.mac_address}')
+    #yield Result(state=State.OK, notice=f'  Radio MAC address: {ap.radio_info.mac_address}', summary=f' - Radio MAC address: {ap.radio_info.mac_address}')
     yield Result(state=State.OK, notice=f' - Radio MAC address: {ap.radio_info.mac_address}')
     yield Result(state=State.OK, notice=f' - Model: {ap.device_info.type}')
     yield Result(state=State.OK, notice=f' - S/N:  {ap.device_info.serial_number}')
@@ -340,12 +342,12 @@ def check_extreme_wlc(item, params, section: Section) -> CheckResult:
     yield Result(state=State.OK, notice=f' - RF Domain Name:   {ap.device_info.rf_domain_name}')
     yield Result(state=State.OK, notice=f' - Hostname:   {ap.device_info.hostname}')
 
-    if device_info.online is not None and device_info.online != 1:
+    if device_info.online != 1:
         online_status = device_info.online
         yield Result(
             state=State(params.get('state_ap_offlinestatus', 1)),
             notice=f'{online_status}',
-            details=' - AP is not online',
+            details=' - AP is online',
         )
 
     # ap has wrong serial number --> AP H/W changed.
@@ -367,6 +369,10 @@ def check_extreme_wlc(item, params, section: Section) -> CheckResult:
             )
     else:
         yield Result(state=State.WARN, summary='AP data from discovery missing.')
+
+
+
+
 
 
 ###########################################################################
