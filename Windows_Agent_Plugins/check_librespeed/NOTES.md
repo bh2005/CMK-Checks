@@ -45,4 +45,8 @@ Natürlich! Hier ist ein PowerShell-Skript, das einen lokalen LibreSpeed-Test au
 - **Invoke-RestMethod**: Führt eine HTTP-Anfrage an den lokalen LibreSpeed-Server aus und erhält die Ergebnisse des Geschwindigkeitstests.
 - **Write-Output**: Gibt die Ergebnisse im Checkmk-kompatiblen Format aus. Jeder Wert (Download-Geschwindigkeit, Upload-Geschwindigkeit und Ping) wird als separater Check ausgegeben.
 
-Mit diesen Schritten sollte dein PowerShell-Skript als Checkmk-Agent-Plugin funktionieren und die Ergebnisse des LibreSpeed-Tests überwachen. Falls du weitere Anpassungen benötigst oder Fragen hast, lass es mich wissen!
+Mit diesen Schritten sollte dein PowerShell-Skript als Checkmk-Agent-Plugin funktionieren und die Ergebnisse des LibreSpeed-Tests überwachen.
+
+https://librespeed.org/
+
+https://github.com/librespeed/speedtest
