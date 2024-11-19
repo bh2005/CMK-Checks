@@ -1,4 +1,4 @@
-Natürlich! Hier ist ein PowerShell-Skript, das einen lokalen LibreSpeed-Test ausführt und die Ergebnisse an den Checkmk-Agent übergibt:
+Hier ist ein PowerShell-Skript, das einen lokalen LibreSpeed-Test ausführt und die Ergebnisse an den Checkmk-Agent übergibt:
 
 1. **Erstelle die Skriptdatei**:
    Speichere das folgende Skript als `check_librespeed.ps1`:
