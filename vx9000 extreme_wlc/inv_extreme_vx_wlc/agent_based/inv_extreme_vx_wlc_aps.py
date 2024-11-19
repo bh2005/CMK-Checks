@@ -215,6 +215,68 @@ def _render_mac_address(bytestring):
 def _render_ip_address(bytestring):
     return '.'.join(['%s' % ord(m) for m in bytestring])
 
+###########################################################################
+#
+#  SNMP DATA Parser function
+#
+###########################################################################
+
+def inv_parse_extreme_wlc(string_table) -> Optional[Dict[str, Ap]]:
+    try:
+        device_infos, ap_infos, uptime_data, raw_radio_infos = string_table
+    except ValueError:
+        return
+
+    parsed = {}
+
+    for device in device_infos:
+        dev_oid_end, mac_address, _type, hostname, version, serial_number, rf_domain_name, \
+            online = device
+
+        dev_info = DeviceInfo(
+            mac_address=_render_mac_address(mac_address),
+            type=_type,
+            hostname=hostname,
+            version=version,
+            serial_number=serial_number,
+            rf_domain_name=rf_domain_name,
+            online=_online_status[int(online)] if online else 'N/A',
+        )
+
+        mapped_raw_ap_info = [ap[1:] for ap in ap_infos if dev_oid_end in ap[0]]  # 1:1
+        mapped_raw_uptime_data = [data[1:] for data in uptime_data if dev_oid_end == data[0]]  # 1:1
+        mapped_raw_radio_info = [radio[1:] for radio in raw_radio_infos if dev_oid_end in radio[0]]  # 1:*
+
+        ap_info = ApInfo(
+            location=mapped_raw_ap_info[0][0],
+            ip_address=mapped_raw_ap_info[0][1]
+        ) if mapped_raw_ap_info else None
+
+        uptime_info = UptimeInfo(
+            uptime=mapped_raw_uptime_data[0][0]
+        ) if mapped_raw_uptime_data else None
+
+        for radio in mapped_raw_radio_info:
+            if not radio:
+                continue
+            radio_info = RadioInfo(
+                device_mac_address=_render_mac_address(radio[0]),
+                alias=radio[1],
+                mac_address=_render_mac_address(radio[2]),
+                num_clients=radio[3]
+            )
+
+            parsed.update({
+                radio_info.alias: Ap(
+                    device_info=dev_info,
+                    ap_info=ap_info,
+                    uptime_info=uptime_info,
+                    radio_info=radio_info
+                )
+            })
+    return parsed
+
+
 
 def parse_inv_extreme_wlc_aps_lwap(string_table: StringTable):
     aps = []
