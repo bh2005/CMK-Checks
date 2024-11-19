@@ -2,7 +2,7 @@
 Import-Module ActiveDirectory
 
 # Define the AD Controller name
-$ADController = "DeinADControllerName"
+$ADController = "DeinADControllerName"    # change to your controller
 
 # Get all sessions on the domain controller
 $sessions = Get-WmiObject -Class Win32_LogonSession -ComputerName $ADController
