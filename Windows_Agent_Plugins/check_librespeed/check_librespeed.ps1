@@ -1,5 +1,5 @@
 # Define the URL of the local LibreSpeed server
-$libreSpeedUrl = "http://localhost:3000/api/v1/speedtest" # sample https://speedtest.yourcompany.com//api/v1/speedtest
+$libreSpeedUrl = "http://localhost:3000/api/v1/speedtest" # sample https:/speedtest.yourcompany.com//api/v1/speedtest
 
 # Perform the speed test
 $response = Invoke-RestMethod -Uri $libreSpeedUrl -Method Get
