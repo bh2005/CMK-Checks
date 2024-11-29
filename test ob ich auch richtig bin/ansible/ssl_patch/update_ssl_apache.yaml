@@ -1,0 +1,78 @@
+- name: Ersetze SSL-Zertifikate auf Debian 12 mit Apache2 und gruppiert Backups
+  hosts: ssl
+  become: yes
+
+  vars:
+    cert_dir: /etc/apache2/ssl
+    import_dir: /path/to/your/import/directory
+    backup_dir: /path/to/your/backup/directory
+
+  tasks:
+    - name: Prüfe, ob Zertifikatsdatei vorhanden ist
+      stat:
+        path: "{{ import_dir }}/{{ inventory_hostname }}.pem"
+      register: cert_file
+
+    - name: Prüfe, ob Schlüsseldatei vorhanden ist
+      stat:
+        path: "{{ import_dir }}/{{ inventory_hostname }}.key"
+      register: key_file
+
+    - name: Prüfe, ob Zwischenzertifikatsdatei vorhanden ist
+      stat:
+        path: "{{ import_dir }}/{{ inventory_hostname }}.chain.pem"
+      register: chain_file
+
+    - name: Sichere alte Zertifikate pro Host
+      copy:
+        src: "{{ cert_dir }}/{{ item }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}/{{ item }}"
+        remote_src: yes
+        backup: yes
+      loop:
+        - cert.pem
+        - cert.key
+        - chain.pem
+      when: item is file and cert_file.stat.exists and key_file.stat.exists
+      register: backup_result
+
+    - name: Fehler beim Sichern der Zertifikate
+      fail:
+        msg: "Fehler beim Sichern der Zertifikate: {{ backup_result.results|json }}"
+      when: backup_result|failed  
+
+    - name: Ersetze Zertifikate
+      copy:
+        src: "{{ import_dir }}/{{ inventory_hostname }}.pem"
+        dest: "{{ cert_dir }}/cert.pem"
+        remote_src: yes
+      when: cert_file.stat.exists
+
+    - name: Ersetze Schlüssel
+      copy:
+        src: "{{ import_dir }}/{{ inventory_hostname }}.key"
+        dest: "{{ cert_dir }}/privkey.pem"
+        remote_src: yes
+        mode: '0600'
+      when: key_file.stat.exists
+
+    - name: Ersetze Zwischenzertifikate (falls vorhanden)
+      copy:
+        src: "{{ import_dir }}/{{ inventory_hostname }}.chain.pem"
+        dest: "{{ cert_dir }}/chain.pem"
+        remote_src: yes
+      when: chain_file.stat.exists
+
+    - name: Starte Apache neu
+      service:
+        name: apache2
+        state: restarted
+      register: restart_result
+
+    - name: Fehler beim Neustart von Apache
+      fail:
+        msg: "Fehler beim Neustart von Apache: {{ restart_result.msg }}"
+      when: restart_result|failed
+
+  tags:
+    - ssl
