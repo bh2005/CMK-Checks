@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # API-configuration (replace these values with your own)
 API_KEY = os.environ.get("XIQ_API_KEY")
 API_SECRET = os.environ.get("XIQ_API_SECRET")
-XIQ_BASE_URL = https://api.extremecloudiq.com
+XIQ_BASE_URL = "https://api.extremecloudiq.com"
 
 def get_access_points_with_location():
     """Retrieves all access points with location information from the ExtremeCloud IQ API."""
