@@ -13,7 +13,7 @@ import argparse
 API_SECRET = os.getenv('XIQ_API_SECRET')
 XIQ_BASE_URL = 'https://api.extremecloudiq.com'
 
-def get_devices(views):
+def get_devices(views, debug):
     if not API_SECRET:
         print("Error: API_SECRET environment variable not set.", file=sys.stderr)
         return 1
@@ -32,9 +32,10 @@ def get_devices(views):
             headers={"Authorization": f"Bearer {API_SECRET}"}
         )
 
-        # Print response to stdout for debugging
-        print(f"DEBUG: Raw API response for page {page}:")
-        print(response.text)
+        if debug:
+            # Print response to stdout for debugging
+            print(f"DEBUG: Raw API response for page {page}:")
+            print(response.text)
 
         if response.status_code != 200:
             print(f"Error: API request failed with HTTP status {response.status_code}.", file=sys.stderr)
@@ -143,9 +144,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
     parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='BASIC',
                         help='Specify the view type for the API request. Default is BASIC.')
+    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug information.')
     
     args = parser.parse_args()
     
-    get_devices(args.views)
+    get_devices(args.views, args.debug)
     combine_json_files()
     convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
