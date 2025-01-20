@@ -83,6 +83,11 @@ def combine_json_files():
 
     print(f"All raw JSON files have been combined into {output_file}.")
 
+def format_mac_address(mac):
+    if mac and len(mac) == 12:
+        return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
+    return mac
+
 def convert_json_to_csv(json_file, csv_file):
     with open(json_file, 'r') as f:
         data = json.load(f)
@@ -117,7 +122,7 @@ def convert_json_to_csv(json_file, csv_file):
                 device.get("create_time"),
                 device.get("update_time"),
                 device.get("serial_number"),
-                device.get("mac_address"),
+                format_mac_address(device.get("mac_address")),
                 device.get("device_function"),
                 device.get("product_type"),
                 device.get("hostname"),
