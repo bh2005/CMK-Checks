@@ -7,12 +7,13 @@ import json
 import glob
 import csv
 import sys
+import argparse
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
 XIQ_BASE_URL = 'https://api.extremecloudiq.com'
 
-def get_devices():
+def get_devices(views):
     if not API_SECRET:
         print("Error: API_SECRET environment variable not set.", file=sys.stderr)
         return 1
@@ -27,7 +28,7 @@ def get_devices():
     for page in range(1, total_pages + 1):
         # Get response from API for the current page
         response = requests.get(
-            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&connected=true&adminStates=MANAGED&views=BASIC&fields=MANAGED_BY&deviceTypes=REAL&nullField=LOCATION_ID&async=false",
+            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&connected=true&adminStates=MANAGED&views={views}&fields=MANAGED_BY&deviceTypes=REAL&nullField=LOCATION_ID&async=false",
             headers={"Authorization": f"Bearer {API_SECRET}"}
         )
 
@@ -139,6 +140,12 @@ def convert_json_to_csv(json_file, csv_file):
     print(f"JSON data has been converted to CSV and saved as {csv_file}.")
 
 if __name__ == "__main__":
-    get_devices()
+    parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
+    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='BASIC',
+                        help='Specify the view type for the API request. Default is BASIC.')
+    
+    args = parser.parse_args()
+    
+    get_devices(args.views)
     combine_json_files()
     convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
