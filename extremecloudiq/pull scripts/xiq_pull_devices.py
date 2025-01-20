@@ -90,14 +90,18 @@ def format_mac_address(mac):
         return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
     return mac
 
-def format_uptime(milliseconds):
-    seconds = milliseconds // 1000
-    days = seconds // (24 * 3600)
-    seconds %= (24 * 3600)
-    hours = seconds // 3600
-    seconds %= 3600
-    minutes = seconds // 60
-    return f"{days}d {hours}h {minutes}m"
+def format_uptime(uptime_ms):
+
+    uptime_s = int(uptime_ms / 1000)
+    uptime_m = uptime_s // 60
+    uptime_h = uptime_m // 60
+    uptime_d = uptime_h // 24
+
+    s = uptime_s % 60
+    m = uptime_m % 60
+    h = uptime_h % 24
+
+    return f"{uptime_d} Tage, {h} Stunden, {m} Minuten, {s} Sekunden"
 
 def convert_json_to_csv(json_file, csv_file):
     with open(json_file, 'r') as f:
