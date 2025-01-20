@@ -17,10 +17,11 @@ get_devices() {
   local max_devices=1000
   local total_devices=0
   local total_pages=9  # Set to 9 pages
+  local views=DETAIL  #BASIC, FULL, STATUS, LOCATION, CLIENT, DETAIL
 
   for page in $(seq 1 $total_pages); do
     # Get response from API for the current page
-    local response=$(curl -s -X GET "$XIQ_BASE_URL/devices?page=$page&limit=$page_size&connected=true&adminStates=MANAGED&views=BASIC&fields=MANAGED_BY&deviceTypes=REAL&nullField=LOCATION_ID&async=false" \
+    local response=$(curl -s -X GET "$XIQ_BASE_URL/devices?page=$page&limit=$page_size&connected=true&adminStates=MANAGED&views=$views&fields=MANAGED_BY&deviceTypes=REAL&nullField=LOCATION_ID&async=false" \
       -H "Authorization: Bearer $API_SECRET")
 
     # Print response to stdout for debugging
