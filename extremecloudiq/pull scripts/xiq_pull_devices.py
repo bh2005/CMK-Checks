@@ -28,7 +28,7 @@ def get_devices(views, debug):
     for page in range(1, total_pages + 1):
         # Get response from API for the current page
         response = requests.get(
-            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&connected=true&adminStates=MANAGED&views={views}&fields=MANAGED_BY&deviceTypes=REAL&nullField=LOCATION_ID&async=false",
+            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
             headers={"Authorization": f"Bearer {API_SECRET}"}
         )
 
