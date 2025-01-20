@@ -90,6 +90,15 @@ def format_mac_address(mac):
         return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
     return mac
 
+def format_uptime(milliseconds):
+    seconds = milliseconds // 1000
+    days = seconds // (24 * 3600)
+    seconds %= (24 * 3600)
+    hours = seconds // 3600
+    seconds %= 3600
+    minutes = seconds // 60
+    return f"{days}d {hours}h {minutes}m"
+
 def convert_json_to_csv(json_file, csv_file):
     with open(json_file, 'r') as f:
         data = json.load(f)
@@ -134,7 +143,7 @@ def convert_json_to_csv(json_file, csv_file):
                 device.get("connected"),
                 device.get("last_connect_time"),
                 device.get("active_clients"),
-                device.get("system_up_time"),
+                format_uptime(device.get("system_up_time")),
                 device.get("managed_by")
             ])
 
