@@ -10,7 +10,7 @@ import glob
 import csv
 import sys
 import argparse
-from tqdm import tqdm  # Import tqdm for progress bar ... apt install python3-tqdm
+from tqdm import tqdm  # Import tqdm for progress bar
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
@@ -24,11 +24,8 @@ def get_devices(views, debug):
     page = 1
     page_size = 100
     all_devices = []  # Initialize as an empty list
-    max_devices = 1000
-    total_devices = 0
-    total_pages = 9  # Set to 9 pages
 
-    for page in tqdm(range(1, total_pages + 1), desc="Fetching devices", unit="page"):
+    while True:
         # Get response from API for the current page
         response = requests.get(
             f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
@@ -43,7 +40,7 @@ def get_devices(views, debug):
         if response.status_code != 200:
             print(f"Error: API request failed with HTTP status {response.status_code}.", file=sys.stderr)
             print(response.json(), file=sys.stderr)  # Print the error response for debugging
-            continue
+            break
 
         # Save the raw response for each page to a separate file
         with open(f"raw_devices_page_{page}.json", 'w') as f:
@@ -53,17 +50,17 @@ def get_devices(views, debug):
         devices = response.json().get('data', [])
 
         if not devices:
-            print(f"No devices found on page {page}, skipping.")
-            continue
+            print(f"No devices found on page {page}, stopping.")
+            break
 
         # Append devices to the all_devices list
         all_devices.extend(devices)
 
-        total_devices += len(devices)
-
-        # If we reach the max number of devices, stop fetching more
-        if total_devices >= max_devices:
+        # If less than 100 devices are returned, stop fetching more pages
+        if len(devices) < page_size:
             break
+
+        page += 1
 
         # Pause for 3 seconds before requesting the next page
         time.sleep(3)
@@ -156,6 +153,12 @@ def convert_json_to_csv(json_file, csv_file):
 
     print(f"JSON data has been converted to CSV and saved as {csv_file}.")
 
+def delete_raw_files():
+    raw_files = glob.glob("raw_devices_page_*.json")
+    for file_name in raw_files:
+        os.remove(file_name)
+    print(f"Deleted {len(raw_files)} raw JSON files.")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
     parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='BASIC',
@@ -167,3 +170,4 @@ if __name__ == "__main__":
     get_devices(args.views, args.debug)
     combine_json_files()
     convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
+    delete_raw_files()
