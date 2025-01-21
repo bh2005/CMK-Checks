@@ -10,6 +10,7 @@ import glob
 import csv
 import sys
 import argparse
+from tqdm import tqdm  # Import tqdm for progress bar ... apt install python3-tqdm
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
@@ -27,7 +28,7 @@ def get_devices(views, debug):
     total_devices = 0
     total_pages = 9  # Set to 9 pages
 
-    for page in range(1, total_pages + 1):
+    for page in tqdm(range(1, total_pages + 1), desc="Fetching devices", unit="page"):
         # Get response from API for the current page
         response = requests.get(
             f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
@@ -77,7 +78,7 @@ def combine_json_files():
     output_file = "output_extreme_api.json"
     all_data = []
 
-    for file_name in glob.glob("raw_devices_page_*.json"):
+    for file_name in tqdm(glob.glob("raw_devices_page_*.json"), desc="Combining JSON files", unit="file"):
         with open(file_name, 'r') as f:
             data = json.load(f)
             all_data.extend(data.get('data', []))
@@ -133,7 +134,7 @@ def convert_json_to_csv(json_file, csv_file):
         ])
         
         # Write the data rows
-        for device in data:
+        for device in tqdm(data, desc="Converting JSON to CSV", unit="device"):
             csvwriter.writerow([
                 device.get("id"),
                 device.get("create_time"),
