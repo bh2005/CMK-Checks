@@ -3,7 +3,6 @@
 
 import os
 import time
-import datetime
 import requests
 import json
 import glob
@@ -91,7 +90,6 @@ def format_mac_address(mac):
     return mac
 
 def format_uptime(uptime_ms):
-
     uptime_s = int(uptime_ms / 1000)
     uptime_m = uptime_s // 60
     uptime_h = uptime_m // 60
@@ -101,7 +99,10 @@ def format_uptime(uptime_ms):
     m = uptime_m % 60
     h = uptime_h % 24
 
-    return f"{uptime_d} Tage, {h} Stunden, {m} Minuten, {s} Sekunden"
+    # Show only the last three digits of uptime_d
+    uptime_d_str = str(uptime_d)[-3:]
+
+    return f"{uptime_d_str} Tage, {h} Stunden, {m} Minuten, {s} Sekunden"
 
 def convert_json_to_csv(json_file, csv_file):
     with open(json_file, 'r') as f:
@@ -125,13 +126,73 @@ def convert_json_to_csv(json_file, csv_file):
             "device_admin_state",
             "connected",
             "last_connect_time",
-            "active_clients",
+            "network_policy_name",
+            "network_policy_id",
+            "primary_ntp_server_address",
+            "primary_dns_server_address",
+            "subnet_mask",
+            "default_gateway",
+            "ipv6_address",
+            "ipv6_netmask",
+            "simulated",
+            "display_version",
+            "location_id",
+            "org_id", 
+            "org_name", 
+            "city_id", 
+            "city_name", 
+            "building_id", 
+            "building_name", 
+            "floor_id", 
+            "floor_name",
+            "country_code",
+            "description",
+            "remote_port_id", 
+            "remote_system_id", 
+            "remote_system_name", 
+            "local_interface",
             "system_up_time",
-            "managed_by"
+            "config_mismatch",
+            "managed_by",
+            "thread0_eui64",
+            "thread0_ext_mac"
         ])
         
         # Write the data rows
         for device in tqdm(data, desc="Converting JSON to CSV", unit="device"):
+            
+            locations = device.get("locations", [])
+            
+            org_id = org_name = city_id = city_name = building_id = building_name = floor_id = floor_name = ""
+            
+            if len(locations) > 0:
+                org_id = locations[0].get("id")
+                org_name = locations[0].get("name")
+                
+                if len(locations) > 1:
+                    city_id = locations[1].get("id")
+                    city_name = locations[1].get("name")
+                    
+                    if len(locations) > 2:
+                        building_id = locations[2].get("id")
+                        building_name = locations[2].get("name")
+                        
+                        if len(locations) > 3:
+                            floor_id = locations[3].get("id")
+                            floor_name = locations[3].get("name")
+
+            
+            lldp_cdp_infos = device.get("lldp_cdp_infos", [])
+            
+            remote_port_id = remote_system_id = remote_system_name = local_interface = ""
+            
+            if len(lldp_cdp_infos) > 0:
+                remote_port_id = lldp_cdp_infos[0].get("port_id")
+                remote_system_id = lldp_cdp_infos[0].get("system_id")
+                remote_system_name = lldp_cdp_infos[0].get("system_name")
+                local_interface = lldp_cdp_infos[0].get("interface_name")
+
+            
             csvwriter.writerow([
                 device.get("id"),
                 device.get("create_time"),
@@ -146,9 +207,36 @@ def convert_json_to_csv(json_file, csv_file):
                 device.get("device_admin_state"),
                 device.get("connected"),
                 device.get("last_connect_time"),
-                device.get("active_clients"),
+                device.get("network_policy_name"),
+                device.get("network_policy_id"),
+                device.get("primary_ntp_server_address"),
+                device.get("primary_dns_server_address"),
+                device.get("subnet_mask"),
+                device.get("default_gateway"),
+                device.get("ipv6_address"),
+                device.get("ipv6_netmask"),
+                device.get("simulated"),
+                device.get("display_version"),
+                device.get("location_id"),
+                org_id,
+                org_name,
+                city_id,
+                city_name,
+                building_id,
+                building_name,
+                floor_id,
+                floor_name,
+                device.get("country_code"),
+                device.get("description"),
+                remote_port_id,
+                remote_system_id,
+                remote_system_name,
+                local_interface,
                 format_uptime(device.get("system_up_time")),
-                device.get("managed_by")
+                device.get("config_mismatch"),
+                device.get("managed_by"),
+                device.get("thread0_eui64"),
+                device.get("thread0_ext_mac")
             ])
 
     print(f"JSON data has been converted to CSV and saved as {csv_file}.")
@@ -161,8 +249,8 @@ def delete_raw_files():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
-    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='BASIC',
-                        help='Specify the view type for the API request. Default is BASIC.')
+    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='FULL',
+                        help='Specify the view type for the API request. Default is FULL.')
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug information.')
     
     args = parser.parse_args()
