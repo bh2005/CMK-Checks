@@ -116,7 +116,7 @@ def format_uptime(uptime_unix):
     return f"{uptime_d} days, {h} hours, {m} minutes, {s} seconds"
 
 def convert_json_to_csv(json_file, csv_file):
-    with open(json_file, 'r') as f):
+    with open(json_file, 'r') as f:
         data = json.load(f)
 
     with open(csv_file, 'w', newline='') as csvfile:
@@ -268,5 +268,5 @@ if __name__ == "__main__":
     
     get_devices(args.views, args.debug)
     combine_json_files()
-    convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
+    convert_json_to_csv('output_extreme_api.json', 'output_extreme_api')
     delete_raw_files()
