@@ -268,5 +268,5 @@ if __name__ == "__main__":
     
     get_devices(args.views, args.debug)
     combine_json_files()
-    convert_json_to_csv('output_extreme_api.json', 'output_extreme_api')
+    convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
     delete_raw_files()
