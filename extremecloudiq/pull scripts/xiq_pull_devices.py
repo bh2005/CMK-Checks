@@ -89,8 +89,22 @@ def format_mac_address(mac):
         return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
     return mac
 
-def format_uptime(uptime_ms):
-    uptime_s = int(uptime_ms / 1000)
+def format_uptime(uptime_unix):
+    """Formats the uptime based on the UNIX timestamp.
+
+    Args:
+        uptime_unix: The system uptime as a UNIX timestamp.
+
+    Returns:
+        The formatted uptime string.
+    """
+    # Get the current time as a UNIX timestamp
+    current_time = int(time.time())
+
+    # Calculate the uptime in seconds
+    uptime_s = current_time - uptime_unix
+
+    # Calculate days, hours, minutes, and seconds
     uptime_m = uptime_s // 60
     uptime_h = uptime_m // 60
     uptime_d = uptime_h // 24
@@ -99,13 +113,10 @@ def format_uptime(uptime_ms):
     m = uptime_m % 60
     h = uptime_h % 24
 
-    # Show only the last three digits of uptime_d
-    uptime_d_str = str(uptime_d)[-3:]
-
-    return f"{uptime_d_str} Tage, {h} Stunden, {m} Minuten, {s} Sekunden"
+    return f"{uptime_d} days, {h} hours, {m} minutes, {s} seconds"
 
 def convert_json_to_csv(json_file, csv_file):
-    with open(json_file, 'r') as f:
+    with open(json_file, 'r') as f):
         data = json.load(f)
 
     with open(csv_file, 'w', newline='') as csvfile:
