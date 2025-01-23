@@ -3,6 +3,7 @@
 
 import os
 import time
+import datetime
 import requests
 import json
 import glob
@@ -89,31 +90,34 @@ def format_mac_address(mac):
         return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
     return mac
 
-def format_uptime(uptime_unix):
-    """Formats the uptime based on the UNIX timestamp.
+def calculate_uptime(timestamp_ms):
+    """Calculates the uptime between a given timestamp and the current time.
 
     Args:
-        uptime_unix: The system uptime as a UNIX timestamp.
+        timestamp_ms: The timestamp in milliseconds.
 
     Returns:
-        The formatted uptime string.
+        A string in the format "days, hours:minutes:seconds" or None in case of an error.
     """
-    # Get the current time as a UNIX timestamp
-    current_time = int(time.time())
+    if not isinstance(timestamp_ms, (int, float)):
+        return None
 
-    # Calculate the uptime in seconds
-    uptime_s = current_time - uptime_unix
+    try:
+        current_time_ms = int(time.time() * 1000)
+        uptime_ms = current_time_ms - int(timestamp_ms)
 
-    # Calculate days, hours, minutes, and seconds
-    uptime_m = uptime_s // 60
-    uptime_h = uptime_m // 60
-    uptime_d = uptime_h // 24
+        if uptime_ms < 0:
+            return "Timestamp is in the future"
 
-    s = uptime_s % 60
-    m = uptime_m % 60
-    h = uptime_h % 24
-
-    return f"{uptime_d} days, {h} hours, {m} minutes, {s} seconds"
+        uptime_delta = datetime.timedelta(milliseconds=uptime_ms)
+        days = uptime_delta.days
+        hours, remainder = divmod(uptime_delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{days} days, {hours:02}:{minutes:02}:{seconds:02}"
+    except OverflowError:
+        return "Uptime too large for timedelta"
+    except TypeError:
+        return None
 
 def convert_json_to_csv(json_file, csv_file):
     with open(json_file, 'r') as f:
@@ -243,7 +247,7 @@ def convert_json_to_csv(json_file, csv_file):
                 remote_system_id,
                 remote_system_name,
                 local_interface,
-                format_uptime(device.get("system_up_time")),
+                calculate_uptime(device.get("system_up_time")),
                 device.get("config_mismatch"),
                 device.get("managed_by"),
                 device.get("thread0_eui64"),
