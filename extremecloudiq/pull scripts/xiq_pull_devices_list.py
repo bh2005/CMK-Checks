@@ -30,6 +30,15 @@ logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
+def renew_token():
+    # Implemention for renew the token
+    # DRAFT:
+    # response = requests.post(f"{XIQ_BASE_URL}/auth/renew", headers={"Authorization": f"Bearer {API_SECRET}"})
+    # if response.status_code == 200:
+    #     new_token = response.json().get('token')
+    #     os.environ['XIQ_API_SECRET'] = new_token
+    pass
+
 def get_devices(views, debug):
     if not API_SECRET:
         log.error("Error: API_SECRET environment variable not set.")
