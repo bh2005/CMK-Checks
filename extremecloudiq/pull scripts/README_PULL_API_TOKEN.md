@@ -1,6 +1,6 @@
-Here's how you can securely store the username and password on Debian and allow any user to run the script:
+**Here's how you can securely store the username and password on Debian and allow any user to run the script:**
 
-Use Environment Variables:
+###Use Environment Variables:
 
 Store the username and password in a file that is only readable by the root user.
 Export these variables in the .bashrc or .profile file of the root user.
@@ -8,7 +8,7 @@ Export these variables in the .bashrc or .profile file of the root user.
     echo "export API_USER='your_username'" >> /root/.bashrc
     echo "export API_PASS='your_password'" >> /root/.bashrc
 
-Create a Wrapper Script:
+###Create a Wrapper Script:
 
 Create a wrapper script that loads the environment variables and then runs the Python script.
 
