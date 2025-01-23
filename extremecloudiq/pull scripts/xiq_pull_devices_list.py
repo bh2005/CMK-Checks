@@ -12,7 +12,13 @@ import sys
 import argparse
 import logging
 from tqdm import tqdm  # Import tqdm for progress bar
-
+###################################################
+#     ToDo`s
+# - secure auth
+# - reneval of token
+# - 
+#
+####################################################
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
