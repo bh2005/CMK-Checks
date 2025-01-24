@@ -5,7 +5,7 @@
 # License: GNU General Public License v2
 #
 # Author: bh2005
-# URL   : https://github.com/bh2005/CMK-Checks
+# URL   : https://github.com/bh2005
 # Date  : 2025-01-24
 #
 # This script fetches device information from ExtremeCloud IQ via its API, processes the data, and exports it to both JSON and CSV formats.
