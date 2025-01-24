@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 #
 # License: GNU General Public License v2
 #
@@ -9,6 +10,7 @@
 #
 # This script fetches device information from ExtremeCloud IQ via its API, processes the data, and exports it to both JSON and CSV formats.
 #
+# Release notes - init release
 
 import os
 import time
