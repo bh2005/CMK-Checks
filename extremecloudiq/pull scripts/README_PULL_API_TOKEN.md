@@ -68,13 +68,13 @@ The script generates several files:
 id,create_time,update_time,serial_number,mac_address,device_function,product_type,hostname,ip_address,software_version,device_admin_state,connected,last_connect_time,network_policy_name,network_policy_id,primary_ntp_server_address,primary_dns_server_address,subnet_mask,default_gateway,ipv6_address,ipv6_netmask,simulated,display_version,location_id,org_id,org_name,city_id,city_name,building_id,building_name,floor_id,floor_name,country_code,description,remote_port_id,remote_system_id,remote_system_name,local_interface,system_up_time,config_mismatch,managed_by,thread0_eui64,thread0_ext_mac
 
 
-Device ID
+Device ID **! KEY indicator !**
 ```markdown
 **! KEY indicator !**
 ```
 Creation Time
 
-Update Time 
+Update Time **! not in ms it`s the latest unix timestamp where the device was comming up !**
 ```markdown
 **! not in ms it`s the latest unix timestamp where the device was comming up !**
 ```
