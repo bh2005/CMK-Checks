@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
 import time
 import datetime
@@ -8,110 +11,30 @@ import csv
 import sys
 import argparse
 import logging
-from tqdm import tqdm
-import concurrent.futures  # Für parallele Ausführung
+from tqdm import tqdm  # Import tqdm for progress bar
+###################################################
+#     ToDo`s
+# - 
+# - 
+# - 
+#
+####################################################
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
 XIQ_BASE_URL = 'https://api.extremecloudiq.com'
 
 # Configure logging
-LOG_FILE = "xiq_api.log"
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
-                    format="%(asctime)s - %(levelname)s - %(message)s")
-log = logging.getLogger(__name__)
-
-def renew_token():
-    # Implementiere die Logik zur Erneuerung des Tokens
-    # Beispiel:
-    # response = requests.post(f"{XIQ_BASE_URL}/auth/renew", headers={"Authorization": f"Bearer {API_SECRET}"})
-    # if response.status_code == 200:
-    #     new_token = response.json().get('token')
-    #     os.environ['XIQ_API_SECRET'] = new_token
-    pass
-
-def fetch_page(page, views):
-    response = requests.get(
-        f"{XIQ_BASE_URL}/devices?page={page}&limit=100&views={views}",
-        headers={"Authorization": f"Bearer {API_SECRET}"}
-    )
-    if response.status_code != 200:
-        log.error(f"Error: API request failed with HTTP status {response.status_code}.")
-        return None
-    return response.json().get('data', [])
-
-def get_devices(views, debug):
-    if not API_SECRET:
-        log.error("Error: API_SECRET environment variable not set.")
-        return 1
-
-    all_devices = []
-    page = 1
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        while True:
-            future_to_page = {executor.submit(fetch_page, page, views): page for page in range(1, 11)}  # Beispiel: 10 Seiten parallel
-            for future in concurrent.futures.as_completed(future_to_page):
-                devices = future.result()
-                if not devices:
-                    break
-                all_devices.extend(devices)
-                if len(devices) < 100:
-                    break
-            page += 10
-            time.sleep(3)
-
-    with open('devices.json', 'w') as f:
-        json.dump(all_devices, f, indent=2)
-
-    log.info("Devices data has been written to devices.json (formatted with json).")
-
-# Weitere Funktionen ...
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
-    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='FULL',
-                        help='Specify the view type for the API request. Default is FULL.')
-    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug information.')
-    
-    args = parser.parse_args()
-    
-    get_devices(args.views, args.debug)
-    combine_json_files()
-    convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
-    delete_raw_files()
-    
-    
-    
-    
-    
-    
-    ################################################2.
-    
-    import os
-import time
-import datetime
-import requests
-import json
-import glob
-import csv
-import sys
-import argparse
-import logging
-from tqdm import tqdm
-import getpass  # For secure password input
-
-# API Configuration (use environment variables)
-API_SECRET = os.getenv('XIQ_API_SECRET')
-XIQ_BASE_URL = 'https://api.extremecloudiq.com'
-
-# Configure logging
-LOG_FILE = "xiq_api.log"
+LOG_FILE = "xiq_api.log"  # Log file
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
 def generate_xiq_api_key(username, password):
-    url = "https://api.extremecloudiq.com/login"
+    # Generate new API key using username and password
+    # Returns:
+    #     str: API key if successful, None if failed
+    url = f"{XIQ_BASE_URL}/login"
     headers = {"Content-Type": "application/json"}
     data = {"username": username, "password": password}
 
@@ -122,275 +45,340 @@ def generate_xiq_api_key(username, password):
         api_key = json_response.get("access_token")
 
         if not api_key:
-            log.error("Error: Could not extract API key from the response. Check the JSON format of the response.")
-            log.error(json_response)
+            log.error("Error: Could not extract API key from the response")
             return None
         return api_key
 
     except requests.exceptions.RequestException as e:
-        log.error(f"Error during API request: {e}")
-        if response is not None:
-            log.error(f"Server response text: {response.text}")
+        log.error(f"Error during API request: {str(e)}")
         return None
     except json.JSONDecodeError as e:
-        log.error(f"Error decoding JSON response: {e}")
+        log.error(f"Error decoding JSON response: {str(e)}")
         return None
 
 def renew_token():
+    # Renew the API token using stored credentials
+    # Returns:
+    #     str: New access token if successful, None if failed
     username = os.getenv('ADMIN_MAIL')
-    if not username:
-        log.error("Environment variable ADMIN_MAIL is not set")
+    password = os.getenv('XIQ_PASS')
+    
+    if not username or not password:
+        log.error("Environment variables ADMIN_MAIL or XIQ_PASS are not set")
         return None
-
-    password = getpass.getpass("ExtremeCloud IQ password: ")
 
     new_api_key = generate_xiq_api_key(username, password)
     if new_api_key:
         os.environ["XIQ_API_SECRET"] = new_api_key
-        update_bashrc(new_api_key)
-        log.info("API key has been renewed and updated.")
+        log.info("API key has been renewed successfully")
         return new_api_key
     else:
-        log.error("Failed to renew the API key.")
+        log.error("Failed to renew the API key")
         return None
 
-def update_bashrc(api_key):
-    bashrc_path = os.path.expanduser("~/.bashrc")
-    env_var_entry = f'export XIQ_API_SECRET="{api_key}"\n'
+def make_api_request(url, headers, max_retries=1):
+    # Make API request with automatic token renewal on unauthorized access
+    global API_SECRET
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 401:  # Unauthorized - token might be expired
+                if attempt < max_retries:
+                    log.info("Token appears to be expired, attempting renewal...")
+                    new_token = renew_token()
+                    if new_token:
+                        API_SECRET = new_token
+                        headers["Authorization"] = f"Bearer {new_token}"
+                        continue
+            
+            return response
 
-    with open(bashrc_path, 'r') as bashrc:
-        lines = bashrc.readlines()
+        except requests.exceptions.RequestException as e:
+            log.error(f"API request failed: {str(e)}")
+            raise
 
-    with open(bashrc_path, 'w') as bashrc:
-        var_set = False
-        for line in lines:
-            if line.startswith('export XIQ_API_SECRET='):
-                bashrc.write(env_var_entry)
-                var_set = True
-            else:
-                bashrc.write(line)
-
-        if not var_set:
-            bashrc.write(env_var_entry)
+    return response
 
 def get_devices(views, debug):
+    global API_SECRET
+    
     if not API_SECRET:
-        log.error("API_SECRET environment variable not set, renewing token.")
-        API_SECRET = renew_token()
-        if not API_SECRET:
+        log.error("API_SECRET environment variable not set, attempting to generate new token.")
+        new_token = renew_token()
+        if not new_token:
             return 1
+        API_SECRET = new_token
 
     page = 1
     page_size = 100
-    all_devices = []
+    all_devices = []  # Initialize as an empty list
+
+    # Create progress bar for API requests
+    pbar = tqdm(desc="Fetching devices", unit="page")
 
     while True:
-        response = requests.get(
-            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
-            headers={"Authorization": f"Bearer {API_SECRET}"}
-        )
+        try:
+            response = make_api_request(
+                f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
+                headers={"Authorization": f"Bearer {API_SECRET}"}
+            )
 
-        if debug:
-            log.debug(f"DEBUG: Raw API response for page {page}:")
-            log.debug(response.text)
+            if debug:
+                # Print response to stdout for debugging
+                log.debug(f"DEBUG: Raw API response for page {page}:")
+                log.debug(response.text)
 
-        if response.status_code == 401:  # Unauthorized, token might be expired
-            log.info("Unauthorized access, attempting to renew token.")
-            API_SECRET = renew_token()
-            if not API_SECRET:
-                return 1
-            continue
+            if response.status_code != 200:
+                log.error(f"Error: API request failed with HTTP status {response.status_code}.")
+                log.error(response.json())  # Print the error response for debugging
+                break
 
-        if response.status_code != 200:
-            log.error(f"Error: API request failed with HTTP status {response.status_code}.")
-            log.error(response.json())
-            break
+            # Save the raw response for each page
+            with open(f"raw_devices_page_{page}.json", 'w') as f:
+                f.write(response.text)
 
-        with open(f"raw_devices_page_{page}.json", 'w') as f:
-            f.write(response.text)
+            # Extract devices from the response
+            devices = response.json().get('data', [])
+            if not devices:
+                log.info(f"No devices found on page {page}, stopping.")
+                break
 
-        devices = response.json().get('data', [])
-        if not devices:
-            log.info(f"No devices found on page {page}, stopping.")
-            break
+            # Append devices to the all_devices list
+            all_devices.extend(devices)
 
-        all_devices.extend(devices)
+            # Update progress bar
+            pbar.update(1)
 
-        if len(devices) < page_size:
-            break
+            # If less than 100 devices are returned, stop fetching more pages
+            if len(devices) < page_size:
+                break
 
-        page += 1
-        time.sleep(3)
+            page += 1
+            # Pause for 3 seconds before requesting the next page
+            time.sleep(3)
 
+        except Exception as e:
+            log.error(f"Unexpected error: {str(e)}")
+            pbar.close()
+            return 1
+
+    pbar.close()
+
+    # Write all devices data to devices.json
     with open('devices.json', 'w') as f:
         json.dump(all_devices, f, indent=2)
 
     log.info("Devices data has been written to devices.json (formatted with json).")
 
-# Weitere Funktionen wie combine_json_files, format_mac_address, calculate_uptime, convert_json_to_csv, delete_raw_files bleiben unverändert ...
+    # Write to CSV with progress bar
+    if not write_to_csv(all_devices):
+        return 1
+
+    return 0
+
+
+def combine_json_files():
+    output_file = "output_extreme_api.json"
+    all_data = []
+
+    for file_name in tqdm(glob.glob("raw_devices_page_*.json"), desc="Combining JSON files", unit="file"):
+        with open(file_name, 'r') as f:
+            data = json.load(f)
+            all_data.extend(data.get('data', []))
+
+    with open(output_file, 'w') as f:
+        json.dump(all_data, f, indent=2)
+
+    log.info(f"All raw JSON files have been combined into {output_file}.")
+
+def format_mac_address(mac):
+    if mac and len(mac) == 12:
+        return ':'.join(mac[i:i+2] for i in range(0, len(mac), 2))
+    return mac
+
+def calculate_uptime(timestamp_ms):
+    """Calculates the uptime between a given timestamp and the current time.
+
+    Args:
+        timestamp_ms: The timestamp in milliseconds.
+
+    Returns:
+        A string in the format "days, hours:minutes:seconds" or None in case of an error.
+    """
+    if not isinstance(timestamp_ms, (int, float)):
+        return None
+
+    try:
+        current_time_ms = int(time.time() * 1000)
+        uptime_ms = current_time_ms - int(timestamp_ms)
+
+        if uptime_ms < 0:
+            return "Timestamp is in the future"
+
+        uptime_delta = datetime.timedelta(milliseconds=uptime_ms)
+        days = uptime_delta.days
+        if days > 2000:
+             return "offline"
+        hours, remainder = divmod(uptime_delta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{days} days, {hours:02}:{minutes:02}:{seconds:02}"
+    except OverflowError:
+        return "Uptime too large for timedelta"
+    except TypeError:
+        return None
+
+def convert_json_to_csv(json_file, csv_file):
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+
+    with open(csv_file, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        
+        # Write the header row
+        csvwriter.writerow([
+            "id",
+            "create_time",
+            "update_time",
+            "serial_number",
+            "mac_address",
+            "device_function",
+            "product_type",
+            "hostname",
+            "ip_address",
+            "software_version",
+            "device_admin_state",
+            "connected",
+            "last_connect_time",
+            "network_policy_name",
+            "network_policy_id",
+            "primary_ntp_server_address",
+            "primary_dns_server_address",
+            "subnet_mask",
+            "default_gateway",
+            "ipv6_address",
+            "ipv6_netmask",
+            "simulated",
+            "display_version",
+            "location_id",
+            "org_id", 
+            "org_name", 
+            "city_id", 
+            "city_name", 
+            "building_id", 
+            "building_name", 
+            "floor_id", 
+            "floor_name",
+            "country_code",
+            "description",
+            "remote_port_id", 
+            "remote_system_id", 
+            "remote_system_name", 
+            "local_interface",
+            "system_up_time",
+            "config_mismatch",
+            "managed_by",
+            "thread0_eui64",
+            "thread0_ext_mac"
+        ])
+        
+        # Write the data rows
+        for device in tqdm(data, desc="Converting JSON to CSV", unit="device"):
+            
+            locations = device.get("locations", [])
+            
+            org_id = org_name = city_id = city_name = building_id = building_name = floor_id = floor_name = ""
+            
+            if len(locations) > 0:
+                org_id = locations[0].get("id")
+                org_name = locations[0].get("name")
+                
+                if len(locations) > 1:
+                    city_id = locations[1].get("id")
+                    city_name = locations[1].get("name")
+                    
+                    if len(locations) > 2:
+                        building_id = locations[2].get("id")
+                        building_name = locations[2].get("name")
+                        
+                        if len(locations) > 3:
+                            floor_id = locations[3].get("id")
+                            floor_name = locations[3].get("name")
+
+            
+            lldp_cdp_infos = device.get("lldp_cdp_infos", [])
+            
+            remote_port_id = remote_system_id = remote_system_name = local_interface = ""
+            
+            if len(lldp_cdp_infos) > 0:
+                remote_port_id = lldp_cdp_infos[0].get("port_id")
+                remote_system_id = lldp_cdp_infos[0].get("system_id")
+                remote_system_name = lldp_cdp_infos[0].get("system_name")
+                local_interface = lldp_cdp_infos[0].get("interface_name")
+
+            
+            csvwriter.writerow([
+                device.get("id"),
+                device.get("create_time"),
+                device.get("update_time"),
+                device.get("serial_number"),
+                format_mac_address(device.get("mac_address")),
+                device.get("device_function"),
+                device.get("product_type"),
+                device.get("hostname"),
+                device.get("ip_address"),
+                device.get("software_version"),
+                device.get("device_admin_state"),
+                device.get("connected"),
+                device.get("last_connect_time"),
+                device.get("network_policy_name"),
+                device.get("network_policy_id"),
+                device.get("primary_ntp_server_address"),
+                device.get("primary_dns_server_address"),
+                device.get("subnet_mask"),
+                device.get("default_gateway"),
+                device.get("ipv6_address"),
+                device.get("ipv6_netmask"),
+                device.get("simulated"),
+                device.get("display_version"),
+                device.get("location_id"),
+                org_id,
+                org_name,
+                city_id,
+                city_name,
+                building_id,
+                building_name,
+                floor_id,
+                floor_name,
+                device.get("country_code"),
+                device.get("description"),
+                remote_port_id,
+                remote_system_id,
+                remote_system_name,
+                local_interface,
+                calculate_uptime(device.get("system_up_time")),
+                device.get("config_mismatch"),
+                device.get("managed_by"),
+                device.get("thread0_eui64"),
+                device.get("thread0_ext_mac")
+            ])
+
+    log.info(f"JSON data has been converted to CSV and saved as {csv_file}.")
+
+def delete_raw_files():
+    raw_files = glob.glob("raw_devices_page_*.json")
+    for file_name in raw_files:
+        os.remove(file_name)
+    log.info(f"Deleted {len(raw_files)} raw JSON files.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
-    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='FULL',
-                        help='Specify the view type for the API request. Default is FULL.')
-    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug information.')
-
+    parser = argparse.ArgumentParser(description="Pull device list from ExtremeCloud IQ")
+    parser.add_argument("--views", default="FULL", help="Views parameter for the API request")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
     args = parser.parse_args()
-
-    get_devices(args.views, args.debug)
+    
+    sys.exit(get_devices(args.views, args.debug))
     combine_json_files()
     convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
     delete_raw_files()
-    
-    ------------------------------------------------
-    
-    
-    #!/usr/bin/env python3
-    # -*- coding: utf-8 -*-
-    
-    import os
-    import time
-    import datetime
-    import requests
-    import json
-    import glob
-    import csv
-    import sys
-    import argparse
-    import logging
-    from tqdm import tqdm
-    
-    # API Configuration (use environment variables)
-    API_SECRET = os.getenv('XIQ_API_SECRET')
-    REFRESH_TOKEN = os.getenv('XIQ_REFRESH_TOKEN')  # Add refresh token environment variable
-    XIQ_BASE_URL = 'https://api.extremecloudiq.com'
-    
-    # Configure logging
-    LOG_FILE = "xiq_api.log"
-    logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
-                        format="%(asctime)s - %(levelname)s - %(message)s")
-    log = logging.getLogger(__name__)
-    
-    class TokenError(Exception):
-        """Custom exception for token-related errors"""
-        pass
-    
-    def renew_token():
-        """
-        Renew the API token using the refresh token.
-        Returns:
-            str: New access token if successful
-        Raises:
-            TokenError: If token renewal fails
-        """
-        if not REFRESH_TOKEN:
-            raise TokenError("Refresh token not found in environment variables")
-    
-        try:
-            response = requests.post(
-                f"{XIQ_BASE_URL}/auth/refresh",
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
-                },
-                json={"refresh_token": REFRESH_TOKEN}
-            )
-    
-            if response.status_code == 200:
-                new_token = response.json().get('access_token')
-                if new_token:
-                    os.environ['XIQ_API_SECRET'] = new_token
-                    log.info("Token successfully renewed")
-                    return new_token
-                else:
-                    raise TokenError("No access token in response")
-            else:
-                raise TokenError(f"Token renewal failed with status code: {response.status_code}")
-    
-        except requests.exceptions.RequestException as e:
-            raise TokenError(f"Error during token renewal request: {str(e)}")
-    
-    def make_api_request(url, headers, max_retries=1):
-        """
-        Make API request with automatic token renewal on expiration
-        """
-        for attempt in range(max_retries + 1):
-            try:
-                response = requests.get(url, headers=headers)
-                
-                if response.status_code == 401:  # Unauthorized - token might be expired
-                    if attempt < max_retries:
-                        log.info("Token appears to be expired, attempting renewal...")
-                        new_token = renew_token()
-                        headers["Authorization"] = f"Bearer {new_token}"
-                        continue
-                
-                return response
-    
-            except TokenError as e:
-                log.error(f"Token renewal failed: {str(e)}")
-                raise
-            except requests.exceptions.RequestException as e:
-                log.error(f"API request failed: {str(e)}")
-                raise
-    
-        return response
-    
-    def get_devices(views, debug):
-        if not API_SECRET:
-            log.error("Error: API_SECRET environment variable not set.")
-            return 1
-    
-        page = 1
-        page_size = 100
-        all_devices = []
-    
-        while True:
-            try:
-                response = make_api_request(
-                    f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
-                    headers={"Authorization": f"Bearer {API_SECRET}"}
-                )
-    
-                if debug:
-                    log.debug(f"DEBUG: Raw API response for page {page}:")
-                    log.debug(response.text)
-    
-                if response.status_code != 200:
-                    log.error(f"Error: API request failed with HTTP status {response.status_code}.")
-                    log.error(response.json())
-                    break
-    
-                # Save the raw response for each page
-                with open(f"raw_devices_page_{page}.json", 'w') as f:
-                    f.write(response.text)
-    
-                devices = response.json().get('data', [])
-    
-                if not devices:
-                    log.info(f"No devices found on page {page}, stopping.")
-                    break
-    
-                all_devices.extend(devices)
-    
-                if len(devices) < page_size:
-                    break
-    
-                page += 1
-                time.sleep(3)
-    
-            except TokenError as e:
-                log.error(f"Fatal error with token: {str(e)}")
-                return 1
-            except Exception as e:
-                log.error(f"Unexpected error: {str(e)}")
-                return 1
-    
-        # Write all devices data to devices.json
-        with open('devices.json', 'w') as f:
-            json.dump(all_devices, f, indent=2)
-    
-        log.info("Devices data has been written to devices.json (formatted with json).")
-    
-    # [Rest of the original functions remain the same...]
-    
