@@ -24,11 +24,11 @@ pip install tqdm
 ## Environment Variables
 The following environment variables must be set:
 
-ADMIN_MAIL: Your ExtremeCloud IQ account email
+- ADMIN_MAIL: Your ExtremeCloud IQ account email
 
-XIQ_PASS: Your ExtremeCloud IQ password
+- XIQ_PASS: Your ExtremeCloud IQ password
 
-XIQ_API_SECRET: Your API token (will be auto-generated if not present)
+- XIQ_API_SECRET: Your API token (will be auto-generated if not present)
 
 Add to your .bashrc:
 
@@ -65,11 +65,14 @@ The script generates several files:
 - output_extreme_api.csv: Final CSV output with formatted device data
 
 ## CSV Output Fields
+id,create_time,update_time,serial_number,mac_address,device_function,product_type,hostname,ip_address,software_version,device_admin_state,connected,last_connect_time,network_policy_name,network_policy_id,primary_ntp_server_address,primary_dns_server_address,subnet_mask,default_gateway,ipv6_address,ipv6_netmask,simulated,display_version,location_id,org_id,org_name,city_id,city_name,building_id,building_name,floor_id,floor_name,country_code,description,remote_port_id,remote_system_id,remote_system_name,local_interface,system_up_time,config_mismatch,managed_by,thread0_eui64,thread0_ext_mac
+
+
 Device ID
 
 Creation Time
 
-Update Time
+Update Time    ! not in ms it`s the latest unix timestamp where the device was comming up !
 
 Serial Number
 
@@ -106,33 +109,33 @@ And more...
 ## Logging
 The script logs its operations to xiq_api.log, including:
 
-API request status
+- API request status
 
-Number of devices found
+- Number of devices found
 
-File operations
+- File operations
 
-Errors and warnings
+- Errors and warnings
 
 Error Handling
 The script includes comprehensive error handling for:
 
-API authentication failures
+- API authentication failures
 
-Network connectivity issues
+- Network connectivity issues
 
-Token expiration and renewal
+- Token expiration and renewal
 
-File operations
+- File operations
 
-Data processing errors
+- Data processing errors
 
 ## Cleanup
 After successful execution, the script automatically:
 
-Removes temporary raw JSON files
+- Removes temporary raw JSON files
 
-Maintains only the final JSON and CSV outputs
+- Maintains only the final JSON and CSV outputs
 
 ## Notes
 - The script uses a 3-second delay between API requests to prevent rate limiting
