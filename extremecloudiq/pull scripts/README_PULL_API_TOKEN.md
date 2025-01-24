@@ -141,5 +141,35 @@ Maintains only the final JSON and CSV outputs
 
 - Progress bars show real-time status of data retrieval and processing
 
+## To install the man page on a Linux system:
 
+1. First, compress the man page:
 
+    gzip -k xiq_pull_devices_list.1
+
+2. Copy the compressed man page to the appropriate directory:
+
+    sudo cp xiq_pull_devices_list.1.gz /usr/share/man/man1/
+
+3. Update the man page database:
+
+    sudo mandb
+    
+You can then view the man page using:
+
+    man xiq_pull_devices_list
+    
+he man page includes:
+
+1. Name and synopsis
+2. Detailed description
+3. Command-line options
+4. Environment variables
+5. File descriptions
+6. Output format
+7. Examples
+8. Diagnostic information
+9. Notes and bugs sections
+10. Author and copyright information
+
+This provides users with a standard Unix-style reference that can be accessed directly from the command line.
