@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+# License: GNU General Public License v2
+#
+# Author: bh2005
+# URL   : https://github.com/bh2005/CMK-Checks
+# Date  : 2025-01-24
+#
+# This script fetches device information from ExtremeCloud IQ via its API, processes the data, and exports it to both JSON and CSV formats.
+#
 
 import os
 import time
@@ -12,13 +21,6 @@ import sys
 import argparse
 import logging
 from tqdm import tqdm  # Import tqdm for progress bar
-###################################################
-#     ToDo`s
-# - 
-# - 
-# - 
-#
-####################################################
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
