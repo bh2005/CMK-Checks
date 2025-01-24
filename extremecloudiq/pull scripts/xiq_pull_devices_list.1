@@ -1,0 +1,120 @@
+.TH XIQ_PULL_DEVICES_LIST 1 "2024" "Version 1.0" "User Commands"
+.SH NAME
+xiq_pull_devices_list \- fetch and process device information from ExtremeCloud IQ
+.SH SYNOPSIS
+.B xiq_pull_devices_list
+[\fB\-\-debug\fR]
+[\fB\-\-views\fR \fIVIEW_TYPE\fR]
+.SH DESCRIPTION
+.B xiq_pull_devices_list
+is a Python script that retrieves device information from ExtremeCloud IQ via its API. It processes the data and exports it to both JSON and CSV formats.
+.PP
+The script performs paginated retrieval of device information, handles authentication, and includes automatic token renewal functionality.
+.SH OPTIONS
+.TP
+.BR \-\-debug
+Enable debug output mode. Additional information will be written to the log file.
+.TP
+.BR \-\-views =\fIVIEW_TYPE\fR
+Specify the view type for the API request. Default is "FULL".
+.SH ENVIRONMENT
+.TP
+.B ADMIN_MAIL
+Your ExtremeCloud IQ account email address.
+.TP
+.B XIQ_PASS
+Your ExtremeCloud IQ password.
+.TP
+.B XIQ_API_SECRET
+Your API token (optional, will be auto-generated if not present).
+.SH FILES
+.TP
+.I raw_devices_page_*.json
+Temporary files containing raw JSON responses for each page.
+.TP
+.I devices.json
+Combined JSON data for all devices.
+.TP
+.I output_extreme_api.csv
+Final CSV output with formatted device data.
+.TP
+.I xiq_api.log
+Log file containing operation details and error messages.
+.SH OUTPUT
+The CSV output includes the following fields:
+.PP
+.RS 4
+Device ID
+.br
+Creation Time
+.br
+Update Time
+.br
+Serial Number
+.br
+MAC Address
+.br
+Device Function
+.br
+Product Type
+.br
+Hostname
+.br
+IP Address
+.br
+Software Version
+.br
+Device Admin State
+.br
+Connection Status
+.br
+Last Connect Time
+.br
+Network Policy Details
+.br
+NTP/DNS Configuration
+.br
+Location Information
+.br
+LLDP/CDP Information
+.br
+System Uptime
+.RE
+.SH EXAMPLES
+.TP
+Basic usage:
+.B python xiq_pull_devices_list.py
+.TP
+With debug output:
+.B python xiq_pull_devices_list.py --debug
+.TP
+With custom views:
+.B python xiq_pull_devices_list.py --views FULL
+.SH DIAGNOSTICS
+The script logs all operations to xiq_api.log, including:
+.PP
+.RS 4
+API request status
+.br
+Number of devices found
+.br
+File operations
+.br
+Errors and warnings
+.RE
+.SH NOTES
+.PP
+The script includes a 3-second delay between API requests to prevent rate limiting.
+.PP
+Token renewal is automatic if the current token expires.
+.PP
+Progress bars show real-time status of data retrieval and processing.
+.SH AUTHOR
+Written by ExtremeCloud IQ Team.
+.SH BUGS
+Report bugs to your system administrator or ExtremeCloud IQ support.
+.SH COPYRIGHT
+Copyright \(co 2024 ExtremeCloud IQ. License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
+.br
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
