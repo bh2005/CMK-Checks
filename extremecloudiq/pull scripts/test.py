@@ -241,3 +241,156 @@ if __name__ == "__main__":
     combine_json_files()
     convert_json_to_csv('output_extreme_api.json', 'output_extreme_api.csv')
     delete_raw_files()
+    
+    ------------------------------------------------
+    
+    
+    #!/usr/bin/env python3
+    # -*- coding: utf-8 -*-
+    
+    import os
+    import time
+    import datetime
+    import requests
+    import json
+    import glob
+    import csv
+    import sys
+    import argparse
+    import logging
+    from tqdm import tqdm
+    
+    # API Configuration (use environment variables)
+    API_SECRET = os.getenv('XIQ_API_SECRET')
+    REFRESH_TOKEN = os.getenv('XIQ_REFRESH_TOKEN')  # Add refresh token environment variable
+    XIQ_BASE_URL = 'https://api.extremecloudiq.com'
+    
+    # Configure logging
+    LOG_FILE = "xiq_api.log"
+    logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                        format="%(asctime)s - %(levelname)s - %(message)s")
+    log = logging.getLogger(__name__)
+    
+    class TokenError(Exception):
+        """Custom exception for token-related errors"""
+        pass
+    
+    def renew_token():
+        """
+        Renew the API token using the refresh token.
+        Returns:
+            str: New access token if successful
+        Raises:
+            TokenError: If token renewal fails
+        """
+        if not REFRESH_TOKEN:
+            raise TokenError("Refresh token not found in environment variables")
+    
+        try:
+            response = requests.post(
+                f"{XIQ_BASE_URL}/auth/refresh",
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json={"refresh_token": REFRESH_TOKEN}
+            )
+    
+            if response.status_code == 200:
+                new_token = response.json().get('access_token')
+                if new_token:
+                    os.environ['XIQ_API_SECRET'] = new_token
+                    log.info("Token successfully renewed")
+                    return new_token
+                else:
+                    raise TokenError("No access token in response")
+            else:
+                raise TokenError(f"Token renewal failed with status code: {response.status_code}")
+    
+        except requests.exceptions.RequestException as e:
+            raise TokenError(f"Error during token renewal request: {str(e)}")
+    
+    def make_api_request(url, headers, max_retries=1):
+        """
+        Make API request with automatic token renewal on expiration
+        """
+        for attempt in range(max_retries + 1):
+            try:
+                response = requests.get(url, headers=headers)
+                
+                if response.status_code == 401:  # Unauthorized - token might be expired
+                    if attempt < max_retries:
+                        log.info("Token appears to be expired, attempting renewal...")
+                        new_token = renew_token()
+                        headers["Authorization"] = f"Bearer {new_token}"
+                        continue
+                
+                return response
+    
+            except TokenError as e:
+                log.error(f"Token renewal failed: {str(e)}")
+                raise
+            except requests.exceptions.RequestException as e:
+                log.error(f"API request failed: {str(e)}")
+                raise
+    
+        return response
+    
+    def get_devices(views, debug):
+        if not API_SECRET:
+            log.error("Error: API_SECRET environment variable not set.")
+            return 1
+    
+        page = 1
+        page_size = 100
+        all_devices = []
+    
+        while True:
+            try:
+                response = make_api_request(
+                    f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
+                    headers={"Authorization": f"Bearer {API_SECRET}"}
+                )
+    
+                if debug:
+                    log.debug(f"DEBUG: Raw API response for page {page}:")
+                    log.debug(response.text)
+    
+                if response.status_code != 200:
+                    log.error(f"Error: API request failed with HTTP status {response.status_code}.")
+                    log.error(response.json())
+                    break
+    
+                # Save the raw response for each page
+                with open(f"raw_devices_page_{page}.json", 'w') as f:
+                    f.write(response.text)
+    
+                devices = response.json().get('data', [])
+    
+                if not devices:
+                    log.info(f"No devices found on page {page}, stopping.")
+                    break
+    
+                all_devices.extend(devices)
+    
+                if len(devices) < page_size:
+                    break
+    
+                page += 1
+                time.sleep(3)
+    
+            except TokenError as e:
+                log.error(f"Fatal error with token: {str(e)}")
+                return 1
+            except Exception as e:
+                log.error(f"Unexpected error: {str(e)}")
+                return 1
+    
+        # Write all devices data to devices.json
+        with open('devices.json', 'w') as f:
+            json.dump(all_devices, f, indent=2)
+    
+        log.info("Devices data has been written to devices.json (formatted with json).")
+    
+    # [Rest of the original functions remain the same...]
+    

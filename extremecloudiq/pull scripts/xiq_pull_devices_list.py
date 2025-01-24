@@ -30,65 +30,104 @@ logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
-def renew_token():
-    # Implemention for renew the token
-    # DRAFT:
-    # response = requests.post(f"{XIQ_BASE_URL}/auth/renew", headers={"Authorization": f"Bearer {API_SECRET}"})
-    # if response.status_code == 200:
-    #     new_token = response.json().get('token')
-    #     os.environ['XIQ_API_SECRET'] = new_token
-    pass
+def renew_token():   # automatischen for renew the API token 
+    username = os.getenv('ADMIN_MAIL')
+    password = os.getenv('XIQ_PASS')
+    
+    if not username or not password:
+        log.error("Environment variables ADMIN_MAIL or XIQ_PASS are not set")
+        return None
+
+    new_api_key = generate_xiq_api_key(username, password)
+    if new_api_key:
+        os.environ["XIQ_API_SECRET"] = new_api_key
+        log.info("API key has been renewed successfully")
+        return new_api_key
+    else:
+        log.error("Failed to renew the API key")
+        return None
+
+def make_api_request(url, headers, max_retries=1):
+    # Make API request with automatic token renewal on unauthorized access
+    global API_SECRET
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers)
+            
+            if response.status_code == 401:  # Unauthorized - token might be expired
+                if attempt < max_retries:
+                    log.info("Token appears to be expired, attempting renewal...")
+                    new_token = renew_token()
+                    if new_token:
+                        API_SECRET = new_token
+                        headers["Authorization"] = f"Bearer {new_token}"
+                        continue
+            
+            return response
+
+        except requests.exceptions.RequestException as e:
+            log.error(f"API request failed: {str(e)}")
+            raise
+
+    return response
 
 def get_devices(views, debug):
     if not API_SECRET:
-        log.error("Error: API_SECRET environment variable not set.")
-        return 1
+        log.error("API_SECRET environment variable not set, attempting to generate new token.")
+        new_token = renew_token()
+        if not new_token:
+            return 1
+        global API_SECRET
+        API_SECRET = new_token
 
-    page = 1  # Initialize page variable
+    page = 1
     page_size = 100
     all_devices = []  # Initialize as an empty list
 
     while True:
-        # Get response from API for the current page
-        response = requests.get(
-            f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
-            headers={"Authorization": f"Bearer {API_SECRET}"}
-        )
+        try:
+            response = make_api_request(
+                f"{XIQ_BASE_URL}/devices?page={page}&limit={page_size}&views={views}",
+                headers={"Authorization": f"Bearer {API_SECRET}"}
+            )
 
-        if debug:
-            # Print response to stdout for debugging
-            log.debug(f"DEBUG: Raw API response for page {page}:")
-            log.debug(response.text)
+            if debug:
+                # Print response to stdout for debugging
+                log.debug(f"DEBUG: Raw API response for page {page}:")
+                log.debug(response.text)
 
-        if response.status_code != 200:
-            log.error(f"Error: API request failed with HTTP status {response.status_code}.")
-            log.error(response.json())  # Print the error response for debugging
-            break
+            if response.status_code != 200:
+                log.error(f"Error: API request failed with HTTP status {response.status_code}.")
+                log.error(response.json())  # Print the error response for debugging
+                break
 
-        # Save the raw response for each page to a separate file
-        with open(f"raw_devices_page_{page}.json", 'w') as f:
-            f.write(response.text)
+            # Save the raw response for each page
+            with open(f"raw_devices_page_{page}.json", 'w') as f:
+                f.write(response.text)
 
-        # Extract devices from the response
-        devices = response.json().get('data', [])
+            # Extract devices from the response
+            devices = response.json().get('data', [])
+            if not devices:
+                log.info(f"No devices found on page {page}, stopping.")
+                break
 
-        if not devices:
-            log.info(f"No devices found on page {page}, stopping.")
-            break
+            # Append devices to the all_devices list
+            all_devices.extend(devices)
 
-        # Append devices to the all_devices list
-        all_devices.extend(devices)
+            # If less than 100 devices are returned, stop fetching more pages
+            if len(devices) < page_size:
+                break
 
-        # If less than 100 devices are returned, stop fetching more pages
-        if len(devices) < page_size:
-            break
+            page += 1
+            # Pause for 3 seconds before requesting the next page
+            time.sleep(3)
 
-        page += 1
+        except Exception as e:
+            log.error(f"Unexpected error: {str(e)}")
+            return 1
 
-        # Pause for 3 seconds before requesting the next page
-        time.sleep(3)
-
-    # Write all devices data to devices.json (after collecting from all pages)
+    # Write all devices data to devices.json
     with open('devices.json', 'w') as f:
         json.dump(all_devices, f, indent=2)
 
