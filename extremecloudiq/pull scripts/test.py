@@ -113,9 +113,8 @@ def get_devices(views, debug):
 
     page = 1
     page_size = 100
-    all_devices = []  # Initialize as an empty list
+    all_devices = []
 
-    # Create progress bar for API requests
     pbar = tqdm(desc="Fetching devices", unit="page")
 
     while True:
@@ -126,13 +125,12 @@ def get_devices(views, debug):
             )
 
             if debug:
-                # Print response to stdout for debugging
                 log.debug(f"DEBUG: Raw API response for page {page}:")
                 log.debug(response.text)
 
             if response.status_code != 200:
                 log.error(f"Error: API request failed with HTTP status {response.status_code}.")
-                log.error(response.json())  # Print the error response for debugging
+                log.error(response.json())
                 break
 
             # Save the raw response for each page
@@ -172,11 +170,15 @@ def get_devices(views, debug):
 
     log.info("Devices data has been written to devices.json (formatted with json).")
 
-    # Write to CSV with progress bar
-    if not write_to_csv(all_devices):
+    # Convert JSON to CSV using existing function
+    try:
+        convert_json_to_csv('devices.json', 'output_extreme_api.csv')
+        log.info("Successfully converted data to CSV")
+        return 0
+    except Exception as e:
+        log.error(f"Error converting to CSV: {str(e)}")
         return 1
 
-    return 0
 
 
 def combine_json_files():
