@@ -10,18 +10,41 @@ import glob
 import csv
 import sys
 import argparse
+import logging
 from tqdm import tqdm  # Import tqdm for progress bar
+###################################################
+#     ToDo`s
+# - secure auth
+# - reneval of token
+# - 
+#
+####################################################
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
 XIQ_BASE_URL = 'https://api.extremecloudiq.com'
 
+# Configure logging
+LOG_FILE = "xiq_api.log"  # Log file
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                    format="%(asctime)s - %(levelname)s - %(message)s")
+log = logging.getLogger(__name__)
+
+def renew_token():
+    # Implemention for renew the token
+    # DRAFT:
+    # response = requests.post(f"{XIQ_BASE_URL}/auth/renew", headers={"Authorization": f"Bearer {API_SECRET}"})
+    # if response.status_code == 200:
+    #     new_token = response.json().get('token')
+    #     os.environ['XIQ_API_SECRET'] = new_token
+    pass
+
 def get_devices(views, debug):
     if not API_SECRET:
-        print("Error: API_SECRET environment variable not set.", file=sys.stderr)
+        log.error("Error: API_SECRET environment variable not set.")
         return 1
 
-    page = 1
+    page = 1  # Initialize page variable
     page_size = 100
     all_devices = []  # Initialize as an empty list
 
@@ -34,12 +57,12 @@ def get_devices(views, debug):
 
         if debug:
             # Print response to stdout for debugging
-            print(f"DEBUG: Raw API response for page {page}:")
-            print(response.text)
+            log.debug(f"DEBUG: Raw API response for page {page}:")
+            log.debug(response.text)
 
         if response.status_code != 200:
-            print(f"Error: API request failed with HTTP status {response.status_code}.", file=sys.stderr)
-            print(response.json(), file=sys.stderr)  # Print the error response for debugging
+            log.error(f"Error: API request failed with HTTP status {response.status_code}.")
+            log.error(response.json())  # Print the error response for debugging
             break
 
         # Save the raw response for each page to a separate file
@@ -50,7 +73,7 @@ def get_devices(views, debug):
         devices = response.json().get('data', [])
 
         if not devices:
-            print(f"No devices found on page {page}, stopping.")
+            log.info(f"No devices found on page {page}, stopping.")
             break
 
         # Append devices to the all_devices list
@@ -69,7 +92,7 @@ def get_devices(views, debug):
     with open('devices.json', 'w') as f:
         json.dump(all_devices, f, indent=2)
 
-    print("Devices data has been written to devices.json (formatted with json).")
+    log.info("Devices data has been written to devices.json (formatted with json).")
 
 def combine_json_files():
     output_file = "output_extreme_api.json"
@@ -83,7 +106,7 @@ def combine_json_files():
     with open(output_file, 'w') as f:
         json.dump(all_data, f, indent=2)
 
-    print(f"All raw JSON files have been combined into {output_file}.")
+    log.info(f"All raw JSON files have been combined into {output_file}.")
 
 def format_mac_address(mac):
     if mac and len(mac) == 12:
@@ -111,6 +134,8 @@ def calculate_uptime(timestamp_ms):
 
         uptime_delta = datetime.timedelta(milliseconds=uptime_ms)
         days = uptime_delta.days
+        if days > 2000:
+             return "offline"
         hours, remainder = divmod(uptime_delta.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{days} days, {hours:02}:{minutes:02}:{seconds:02}"
@@ -254,13 +279,13 @@ def convert_json_to_csv(json_file, csv_file):
                 device.get("thread0_ext_mac")
             ])
 
-    print(f"JSON data has been converted to CSV and saved as {csv_file}.")
+    log.info(f"JSON data has been converted to CSV and saved as {csv_file}.")
 
 def delete_raw_files():
     raw_files = glob.glob("raw_devices_page_*.json")
     for file_name in raw_files:
         os.remove(file_name)
-    print(f"Deleted {len(raw_files)} raw JSON files.")
+    log.info(f"Deleted {len(raw_files)} raw JSON files.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
