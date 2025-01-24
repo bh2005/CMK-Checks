@@ -14,8 +14,8 @@ import logging
 from tqdm import tqdm  # Import tqdm for progress bar
 ###################################################
 #     ToDo`s
-# - secure auth
-# - reneval of token
+# - 
+# - 
 # - 
 #
 ####################################################
@@ -30,7 +30,36 @@ logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
-def renew_token():   # automatischen for renew the API token 
+def generate_xiq_api_key(username, password):
+    # Generate new API key using username and password
+    # Returns:
+    #     str: API key if successful, None if failed
+    url = f"{XIQ_BASE_URL}/login"
+    headers = {"Content-Type": "application/json"}
+    data = {"username": username, "password": password}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        json_response = response.json()
+        api_key = json_response.get("access_token")
+
+        if not api_key:
+            log.error("Error: Could not extract API key from the response")
+            return None
+        return api_key
+
+    except requests.exceptions.RequestException as e:
+        log.error(f"Error during API request: {str(e)}")
+        return None
+    except json.JSONDecodeError as e:
+        log.error(f"Error decoding JSON response: {str(e)}")
+        return None
+
+def renew_token():
+    # Renew the API token using stored credentials
+    # Returns:
+    #     str: New access token if successful, None if failed
     username = os.getenv('ADMIN_MAIL')
     password = os.getenv('XIQ_PASS')
     
@@ -73,12 +102,13 @@ def make_api_request(url, headers, max_retries=1):
     return response
 
 def get_devices(views, debug):
+    global API_SECRET
+    
     if not API_SECRET:
         log.error("API_SECRET environment variable not set, attempting to generate new token.")
         new_token = renew_token()
         if not new_token:
             return 1
-        global API_SECRET
         API_SECRET = new_token
 
     page = 1
@@ -132,6 +162,7 @@ def get_devices(views, debug):
         json.dump(all_devices, f, indent=2)
 
     log.info("Devices data has been written to devices.json (formatted with json).")
+
 
 def combine_json_files():
     output_file = "output_extreme_api.json"
@@ -327,11 +358,9 @@ def delete_raw_files():
     log.info(f"Deleted {len(raw_files)} raw JSON files.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Fetch and process devices from ExtremeCloud IQ API.')
-    parser.add_argument('-V', '--views', type=str, choices=['BASIC', 'FULL', 'STATUS', 'LOCATION', 'CLIENT', 'DETAIL'], default='FULL',
-                        help='Specify the view type for the API request. Default is FULL.')
-    parser.add_argument('-d', '--debug', action='store_true', help='Enable debug information.')
-    
+    parser = argparse.ArgumentParser(description="Pull device list from ExtremeCloud IQ")
+    parser.add_argument("--views", default="FULL", help="Views parameter for the API request")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
     args = parser.parse_args()
     
     get_devices(args.views, args.debug)
