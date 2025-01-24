@@ -69,11 +69,15 @@ id,create_time,update_time,serial_number,mac_address,device_function,product_typ
 
 
 Device ID
-
+```markdown
+**! KEY indicator !**
+```
 Creation Time
 
-Update Time    ! not in ms it`s the latest unix timestamp where the device was comming up !
-
+Update Time 
+```markdown
+**! not in ms it`s the latest unix timestamp where the device was comming up !**
+```
 Serial Number
 
 MAC Address
