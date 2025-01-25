@@ -9,9 +9,9 @@ import logging
 import argparse
 
 # Konfiguration
-SERVICE_ID = "extremecloudiq"  # Not used in this version without keyring
+SERVICE_ID = "extremecloudiq"  # Not used in this version prepare for keyring usage
 XIQ_BASE_URL = "https://api.extremecloudiq.com"
-LOG_FILE = "/var/log/check_mk/xiq_agent.log"  # Logdatei unterhalb von /var/log/check_mk
+LOG_FILE = "/var/log/check_mk/xiq_agent.log"  # Logfile path /var/log/check_mk
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
