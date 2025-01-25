@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import time
+import json
 
 def check_xiq_device(item, params, check_context):
     device = check_context["xiq_devices"][item]
@@ -34,50 +36,58 @@ def check_xiq_device(item, params, check_context):
             return f"{uptime_d} Tage, {h:02} Stunden, {m:02} Minuten, {s:02} Sekunden"
         except TypeError:
             return None
+
     uptime = format_uptime(device.get("system_up_time"))
+    connected = device.get("connected")
 
-    output = f"ID: {device.get('id', '-')}, " \
-             f"Create Time: {device.get('create_time', '-')}, " \
-             f"Update Time: {device.get('update_time', '-')}, " \
-             f"Serial: {device.get('serial_number', '-')}, " \
-             f"MAC: {format_mac(device.get('mac_address', '-'))}, " \
-             f"Function: {device.get('device_function', '-')}, " \
-             f"Product: {device.get('product_type', '-')}, " \
-             f"Hostname: {device.get('hostname', '-')}, " \
-             f"IP: {device.get('ip_address', '-')}, " \
-             f"Software: {device.get('software_version', '-')}, " \
-             f"Admin State: {device.get('device_admin_state', '-')}, " \
-             f"Connected: {device.get('connected', '-')}, " \
-             f"Last Connect: {device.get('last_connect_time', '-')}, " \
-             f"Policy Name: {device.get('network_policy_name', '-')}, " \
-             f"Policy ID: {device.get('network_policy_id', '-')}, " \
-             f"NTP Server: {device.get('primary_ntp_server_address', '-')}, " \
-             f"DNS Server: {device.get('primary_dns_server_address', '-')}, " \
-             f"Subnet Mask: {device.get('subnet_mask', '-')}, " \
-             f"Gateway: {device.get('default_gateway', '-')}, " \
-             f"IPv6: {device.get('ipv6_address', '-')}, " \
-             f"IPv6 Netmask: {device.get('ipv6_netmask', '-')}, " \
-             f"Simulated: {device.get('simulated', '-')}, " \
-             f"Display Version: {device.get('display_version', '-')}, " \
-             f"Location ID: {device.get('location_id', '-')}, " \
-             f"Org ID: {device.get('org_id', '-')}, " \
-             f"Org Name: {device.get('org_name', '-')}, " \
-             f"City ID: {device.get('city_id', '-')}, " \
-             f"City Name: {device.get('city_name', '-')}, " \
-             f"Building ID: {device.get('building_id', '-')}, " \
-             f"Building Name: {device.get('building_name', '-')}, " \
-             f"Floor ID: {device.get('floor_id', '-')}, " \
-             f"Floor Name: {device.get('floor_name', '-')}, " \
-             f"Country Code: {device.get('country_code', '-')}, " \
-             f"Description: {device.get('description', '-')}, " \
-             f"Remote Port ID: {device.get('remote_port_id', '-')}, " \
-             f"Remote System ID: {device.get('remote_system_id', '-')}, " \
-             f"Remote System Name: {device.get('remote_system_name', '-')}, " \
-             f"Local Interface: {device.get('local_interface', '-')}, " \
-             f"Uptime: {uptime}, " \
-             f"Config Mismatch: {device.get('config_mismatch', '-')}, " \
-             f"Managed By: {device.get('managed_by', '-')}, " \
-             f"Thread0 EUI64: {device.get('thread0_eui64', '-')}, " \
-             f"Thread0 Ext MAC: {device.get('thread0_ext_mac', '-')}"
+    #Erstellen einer Liste mit formatierten Key-Value Paaren für die Ausgabe
+    output_lines = [
+        f"ID: {device.get('id', '-')}",
+        f"Create Time: {device.get('create_time', '-')}",
+        f"Update Time: {device.get('update_time', '-')}",
+        f"Serial: {device.get('serial_number', '-')}",
+        f"MAC: {format_mac(device.get('mac_address', '-'))}",
+        f"Function: {device.get('device_function', '-')}",
+        f"Product: {device.get('product_type', '-')}",
+        f"Hostname: {device.get('hostname', '-')}",
+        f"IP: {device.get('ip_address', '-')}",
+        f"Software: {device.get('software_version', '-')}",
+        f"Admin State: {device.get('device_admin_state', '-')}",
+        f"Connected: {connected}",
+        f"Last Connect: {device.get('last_connect_time', '-')}",
+        f"Policy Name: {device.get('network_policy_name', '-')}",
+        f"Policy ID: {device.get('network_policy_id', '-')}",
+        f"NTP Server: {device.get('primary_ntp_server_address', '-')}",
+        f"DNS Server: {device.get('primary_dns_server_address', '-')}",
+        f"Subnet Mask: {device.get('subnet_mask', '-')}",
+        f"Gateway: {device.get('default_gateway', '-')}",
+        f"IPv6: {device.get('ipv6_address', '-')}",
+        f"IPv6 Netmask: {device.get('ipv6_netmask', '-')}",
+        f"Simulated: {device.get('simulated', '-')}",
+        f"Display Version: {device.get('display_version', '-')}",
+        f"Location ID: {device.get('location_id', '-')}",
+        f"Org ID: {device.get('org_id', '-')}",
+        f"Org Name: {device.get('org_name', '-')}",
+        f"City ID: {device.get('city_id', '-')}",
+        f"City Name: {device.get('city_name', '-')}",
+        f"Building ID: {device.get('building_id', '-')}",
+        f"Building Name: {device.get('building_name', '-')}",
+        f"Floor ID: {device.get('floor_id', '-')}",
+        f"Floor Name: {device.get('floor_name', '-')}",
+        f"Country Code: {device.get('country_code', '-')}",
+        f"Description: {device.get('description', '-')}",
+        f"Remote Port ID: {device.get('remote_port_id', '-')}",
+        f"Remote System ID: {device.get('remote_system_id', '-')}",
+        f"Remote System Name: {device.get('remote_system_name', '-')}",
+        f"Local Interface: {device.get('local_interface', '-')}",
+        f"Uptime: {uptime}",
+        f"Config Mismatch: {device.get('config_mismatch', '-')}",
+        f"Managed By: {device.get('managed_by', '-')}",
+        f"Thread0 EUI64: {device.get('thread0_eui64', '-')}",
+        f"Thread0 Ext MAC: {device.get('thread0_ext_mac', '-')}"
+    ]
 
-    return 0, output
+    #Verbinden der einzelnen Zeilen mit Zeilenumbrüchen
+    output = "\n".join(output_lines)
+
+    return 0, output, perfdata #Performance Daten zurückgeben
