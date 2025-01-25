@@ -7,8 +7,10 @@ def inventory_xiq_devices(check_context):
         for line in device_data:
             try:
                 device = json.loads(line)
-                function = device.get("device_function") # Überprüfe ob device_function überhaupt vorhanden ist
-                if function:
-                    yield (device.get("id"), device) # Gib das komplette Device zurück
+                hostname = device.get("hostname") #Hostname extrahieren
+                if hostname: #Überprüfen ob Hostname vorhanden ist
+                    yield (hostname, device) #Hostname als Item verwenden
+                else:
+                    log.warning(f"Gerät ohne Hostname gefunden (ID: {device.get('id', 'unbekannt')}). Wird nicht inventarisiert.")
             except json.JSONDecodeError:
                 pass
