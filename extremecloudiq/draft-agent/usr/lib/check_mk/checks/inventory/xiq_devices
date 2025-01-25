@@ -9,6 +9,16 @@ def inventory_xiq_devices(check_context):
                 device = json.loads(line)
                 function = device.get("device_function")
                 if function:
-                    yield (device.get("id"), {"device": device}) # Gibt die Geräte ID als Item zurück
+                    yield (device.get("id"), {
+                        "device": device,
+                        "id": device.get("id"),
+                        "serial_number": device.get("serial_number"),
+                        "mac_address": device.get("mac_address"),
+                        "product_type": device.get("product_type"),
+                        "software_version": device.get("software_version"),
+                        "device_admin_state": device.get("device_admin_state"),
+                        "network_policy_name": device.get("network_policy_name"),
+                        "managed_by": device.get("managed_by")
+                    })
             except json.JSONDecodeError:
                 pass
