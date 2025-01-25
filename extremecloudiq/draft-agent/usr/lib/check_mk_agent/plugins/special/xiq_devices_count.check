@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+def check_xiq_devices_count(item, params, check_context):
+    device_count_data = check_context.get("xiq_devices_count", [])
+    if device_count_data:
+        for line in device_count_data:
+            if "device_count" in line:
+                try:
+                    count = int(line.split()[1])
+                    if params: #Wenn Parameter gesetzt wurden
+                        warn, crit = params.get("warn"), params.get("crit")
+                        perfdata = [("device_count", count, warn, crit)]
+                        if count >= crit:
+                            return 2, f"Geräteanzahl: {count} (KRITISCH)", perfdata
+                        elif count >= warn:
+                            return 1, f"Geräteanzahl: {count} (WARNUNG)", perfdata
+                        else:
+                            return 0, f"Geräteanzahl: {count} (OK)", perfdata
+                    else:
+                        return 0, f"Geräteanzahl: {count}", [("device_count", count)]
+                except (ValueError, IndexError):
+                    pass
+        return 3, "Keine Geräteanzahl gefunden"
+    else:
+        return 3, "Keine Daten von xiq_devices_count erhalten"
