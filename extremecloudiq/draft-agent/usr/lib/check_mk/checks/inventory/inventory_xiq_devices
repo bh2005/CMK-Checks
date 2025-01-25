@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+import json
+
+def inventory_xiq_devices(check_context):
+    device_data = check_context.get("xiq_devices", [])
+    if device_data:
+        for line in device_data:
+            try:
+                device = json.loads(line)
+                function = device.get("device_function") # Überprüfe ob device_function überhaupt vorhanden ist
+                if function:
+                    yield (device.get("id"), device) # Gib das komplette Device zurück
+            except json.JSONDecodeError:
+                pass
