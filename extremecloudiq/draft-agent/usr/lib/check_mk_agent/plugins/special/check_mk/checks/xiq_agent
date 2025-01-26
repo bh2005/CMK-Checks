@@ -15,7 +15,7 @@ logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format="%(asctime)s -
 log = logging.getLogger(__name__)
 
 def generate_xiq_api_key(username, password):
-    """Generates a new XIQ API key."""
+    #"""Generates a new XIQ API key."""
     url = f"{XIQ_BASE_URL}/login"
     headers = {"Content-Type": "application/json"}
     data = {"username": username, "password": password}
@@ -39,7 +39,7 @@ def generate_xiq_api_key(username, password):
         return None
 
 def renew_token():
-    """Renews the API token using stored credentials."""
+    #"""Renews the API token using stored credentials."""
     username = os.getenv("ADMIN_MAIL")
     password = os.getenv("XIQ_PASS")
 
@@ -57,7 +57,7 @@ def renew_token():
         return None
 
 def get_api_key():
-    """Retrieves the API token from the environment variable."""
+    #"""Retrieves the API token from the environment variable."""
     api_key = os.getenv("XIQ_API_SECRET")
     if not api_key:
         log.error("Environment variable XIQ_API_SECRET is not set. Attempting to renew token.")
@@ -68,7 +68,7 @@ def get_api_key():
     return api_key
 
 def get_xiq_data(endpoint, params=None):
-    """Queries the XIQ API with improved error handling."""
+    #"""Queries the XIQ API with improved error handling."""
     url = f"{XIQ_BASE_URL}{endpoint}"
     api_key = get_api_key()
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
@@ -102,7 +102,7 @@ def get_xiq_data(endpoint, params=None):
         return None
 
 def format_uptime(uptime_unix):
-    """Formats the uptime based on the UNIX timestamp."""
+    #"""Formats the uptime based on the UNIX timestamp."""
     if not isinstance(uptime_unix, (int, float)):
         return None
 
