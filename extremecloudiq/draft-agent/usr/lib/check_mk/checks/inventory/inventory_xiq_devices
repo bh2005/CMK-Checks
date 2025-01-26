@@ -2,6 +2,8 @@
 import json
 import logging
 
+# Configure logging
+logging.basicConfig(level=logging.WARNING)
 log = logging.getLogger(__name__)
 
 def inventory_xiq_devices(check_context):
@@ -15,6 +17,5 @@ def inventory_xiq_devices(check_context):
                     yield (hostname, device) # Use hostname as item
                 else:
                     log.warning(f"Device without hostname found (ID: {device.get('id', 'unknown')}). Will not be inventoried.")
-            except json.JSONDecodeError:
-                log.error(f"Failed to decode JSON: {line}")
-                pass
+            except json.JSONDecodeError as e:
+                log.error(f"Failed to decode JSON: {line}. Error: {e}")
