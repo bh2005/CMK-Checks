@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import json
+import logging
+
+log = logging.getLogger(__name__)
 
 def inventory_xiq_devices(check_context):
     device_data = check_context.get("xiq_devices", [])
@@ -7,10 +10,11 @@ def inventory_xiq_devices(check_context):
         for line in device_data:
             try:
                 device = json.loads(line)
-                hostname = device.get("hostname") #Hostname extrahieren
-                if hostname: #Überprüfen ob Hostname vorhanden ist
-                    yield (hostname, device) #Hostname als Item verwenden
+                hostname = device.get("hostname") # Extract hostname
+                if hostname: # Check if hostname exists
+                    yield (hostname, device) # Use hostname as item
                 else:
-                    log.warning(f"Gerät ohne Hostname gefunden (ID: {device.get('id', 'unbekannt')}). Wird nicht inventarisiert.")
+                    log.warning(f"Device without hostname found (ID: {device.get('id', 'unknown')}). Will not be inventoried.")
             except json.JSONDecodeError:
+                log.error(f"Failed to decode JSON: {line}")
                 pass
