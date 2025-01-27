@@ -3,7 +3,6 @@
 # XIQ Extreme Cloud settings
 
 
-
 from cmk.gui.plugins.wato import (
     HostRulespec,
     rulespec_registry,
@@ -31,3 +30,6 @@ rulespec_registry.register(
         valuespec=_valuespec_example_rule,
     )
 )
+
+
+### test comment
