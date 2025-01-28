@@ -106,6 +106,14 @@ def format_uptime(uptime_unix):
         return f"{uptime_d}d {h:02}h {m:02}m {s:02}s"
     except TypeError:
         return None
+    
+def check_thresholds(value, warn, crit):
+    if value >= crit:
+        return "CRITICAL"
+    elif value >= warn:
+        return "WARNING"
+    else:
+        return "OK"
 
 def main():
     parser = argparse.ArgumentParser(description="Checkmk special agent for ExtremeCloud IQ Access Points.")
@@ -139,14 +147,18 @@ def main():
         if performance:
             cpu_usage = performance.get("cpu_usage", "N/A")
             memory_usage = performance.get("memory_usage", "N/A")
-            print(f"{device['name']} CPU {cpu_usage}% Memory {memory_usage}%")
+            cpu_status = check_thresholds(cpu_usage, 70, 90)
+            memory_status = check_thresholds(memory_usage, 70, 90)
+            print(f"{device['name']} CPU {cpu_usage}% ({cpu_status}) Memory {memory_usage}% ({memory_status})")
 
     print("<<<xiq_ap_clients>>>")
     for device in devices["data"]:
         ap_id = device["id"]
         clients = get_xiq_data(f"/devices/{ap_id}/clients", api_key)
         if clients and "data" in clients:
-            print(f"{device['name']} Clients {len(clients['data'])}")
+            client_count = len(clients["data"])
+            client_status = check_thresholds(client_count, 40, 60)
+            print(f"{device['name']} Clients {client_count} ({client_status})")
 
 if __name__ == "__main__":
     main()
