@@ -1,16 +1,16 @@
-Based on the ExtremeCloud IQ (XIQ) API documentation, there are several key metrics and endpoints that can be used to monitor Access Points (APs) effectively. Below are some suggestions for monitoring APs, along with the relevant API endpoints and metrics:
+### Based on the ExtremeCloud IQ (XIQ) API documentation, there are several key metrics and endpoints that can be used to monitor Access Points (APs) effectively. Below are some suggestions for monitoring APs, along with the relevant API endpoints and metrics:
 
-1. AP Health and Status
+## 1. AP Health and Status
 Monitoring the health and status of APs is critical to ensure they are operational and performing well.
 
-Endpoints:
+# Endpoints:
 GET /devices: Retrieve a list of all devices, including APs.
 
 Filter by device_type to get only APs.
 
 Example: device_type=ACCESS_POINT.
 
-Metrics to Monitor:
+# Metrics to Monitor:
 Status: Check if the AP is online or offline.
 
 Uptime: Measure how long the AP has been operational.
@@ -18,12 +18,12 @@ Uptime: Measure how long the AP has been operational.
 Last Seen: Timestamp of the last communication with the AP.
 
 Example API Call:
-python
-Copy
+''' python
 devices = get_xiq_data("/devices", api_key, params={"device_type": "ACCESS_POINT"})
 for device in devices.get("data", []):
     print(f"AP Name: {device['name']}, Status: {device['status']}, Uptime: {device['system_up_time']}")
-2. AP Performance Metrics
+'''
+## 2. AP Performance Metrics
 Monitoring performance metrics helps identify bottlenecks and optimize network performance.
 
 Endpoints:
