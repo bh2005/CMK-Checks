@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+
+def check_xiq_device(item, params, check_context):
+    for line in check_context["xiq_devices"]:
+        device_name, uptime = line.split()
+        if device_name == item:
+            # Hier kannst du die Uptime überprüfen und den Check-Status zurückgeben
+            # ...
+            return 0, f"{item}: Uptime ist {uptime}"  # OK
+    return 3, f"{item} nicht gefunden"  # UNKNOWN

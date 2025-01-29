@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+
+def agent_xiq_agent(params, hostname, ipaddress):
+    args = [hostname]
+
+    if "xiq_username" in params:
+        args.append(params["xiq_username"])
+    if "xiq_password" in params:
+        args.append(params["xiq_password"])
+
+    os.execv("/usr/lib/check_mk_agent/plugins/special/xiq_agent", ["xiq_agent"] + args)
+
+if __name__ == "__main__":
+    agent_xiq_agent(eval(sys.argv[1]), sys.argv[2], sys.argv[3])

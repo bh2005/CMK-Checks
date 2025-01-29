@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+
+def inventory_xiq_devices(check_context):
+    for line in check_context["xiq_devices"]:
+        try:
+            device_name, uptime = line.split()
+            yield (device_name, {})
+        except ValueError:
+            pass
