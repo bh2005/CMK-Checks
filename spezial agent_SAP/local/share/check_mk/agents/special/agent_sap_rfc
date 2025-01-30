@@ -89,7 +89,7 @@ elif status['RETURNCODE'] == 0:
 # (2, 'CRITICAL', ' Batchman not running on', 'instance.hec.XXX.net')
 
 # <<<sap_pyrfc_batchman>>>
-# (0, 'OK', 'KS_H11_003', 'BatchMan Release 5.0.4.1', 'instance.hec.XXX.net')
+# (0, 'OK', 'KS_003', 'BatchMan Release 5.0.4.1', 'instance.hec.XXX.net')
 
 
     
