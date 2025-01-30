@@ -60,7 +60,7 @@ def renew_token():
         return None
 
 def get_xiq_api_token():
-    """Gets the XIQ API token, renewing it if necessary."""
+    #"""Gets the XIQ API token, renewing it if necessary."""
     api_token = os.getenv("XIQ_API_SECRET")  # Get from environment
 
     if not api_token:
@@ -71,7 +71,7 @@ def get_xiq_api_token():
     return api_token
 
 def get_org_id(org_name):
-    """Gets the ID of an organization by its name."""
+    #"""Gets the ID of an organization by its name."""
     api_token = get_xiq_api_token()  # Get the API token
     if not api_token:
         return None  # Return None if token retrieval fails.
@@ -90,7 +90,7 @@ def get_org_id(org_name):
         return None
 
 def get_city_id(city_name):
-    """Gets the ID of a city by its name."""
+    #"""Gets the ID of a city by its name."""
     api_token = get_xiq_api_token()
     if not api_token:
         return None
@@ -130,7 +130,7 @@ def get_building_id(building_name):
 
 
 def get_floor_id(floor_name, building_id):
-    """Gets the ID of a floor by its name and building ID."""
+    #"""Gets the ID of a floor by its name and building ID."""
     api_token = get_xiq_api_token()
     if not api_token:
         return None
@@ -150,7 +150,7 @@ def get_floor_id(floor_name, building_id):
 
 
 def create_location(name, org_id, building_id, floor_id, city_id):
-    """Creates a new location in XIQ."""
+    #"""Creates a new location in XIQ."""
     api_token = get_xiq_api_token()
     if not api_token:
         return None
@@ -173,7 +173,7 @@ def create_location(name, org_id, building_id, floor_id, city_id):
             print(f"Response content: {response.text}")
 
 def read_csv_and_create_locations():
-    """Reads the CSV file and creates locations."""
+    #"""Reads the CSV file and creates locations."""
     with open("locations.csv", "r", encoding="utf-8") as csvfile: # Specify encoding
         reader = csv.DictReader(csvfile)
         for row in reader:
