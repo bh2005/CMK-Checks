@@ -1,0 +1,22 @@
+{'author': 'Stefan Mühling',
+ 'description': '- Certificates (Signing, Trust Chain, UI)\n'
+                '- List VMs without tags\n'
+                '- List IP of VMs\n'
+                '- List DRS/HA status (enabled/disabled)\n',
+ 'download_url': '',
+ 'files': {'cmk_addons_plugins': ['vmware_api/agent_based/inv_vmware_api_ips.py',
+                                  'vmware_api/agent_based/vmware_api_certificates.py',
+                                  'vmware_api/agent_based/vmware_api_ha.py',
+                                  'vmware_api/agent_based/vmware_api_tags.py',
+                                  'vmware_api/libexec/agent_vmware_api',
+                                  'vmware_api/rulesets/agent_vmware_api.py',
+                                  'vmware_api/server_side_calls/agent_call.py',
+                                  'vmware_api/special_agent/agent.py',
+                                  'vmware_api/rulesets/vmware_api_certificates.py',
+                                  'vmware_api/rulesets/vmware_api_ha.py']},
+ 'name': 'agent_vmware_api',
+ 'title': 'VMware API special agent',
+ 'version': '1.0.10',
+ 'version.min_required': '2.3.0b6',
+ 'version.packaged': '2.3.0p10',
+ 'version.usable_until': None}
