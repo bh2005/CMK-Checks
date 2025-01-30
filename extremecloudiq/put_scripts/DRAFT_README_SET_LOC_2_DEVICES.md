@@ -48,3 +48,11 @@ This Python script automates the assignment of locations to devices in ExtremeCl
 The CSV file **must** have the following columns in this *exact* order. The column names are case-sensitive:
 
 id, location_id, x, y, latitude, longitude
+
+sample CSV
+```bash
+id,location_id,x,y,latitude,longitude
+1,67890,100,200,50.1109,8.6821
+2,78901,150,250,48.8566,2.3522
+3,89012,200,300,51.5074,-0.1278
+```
