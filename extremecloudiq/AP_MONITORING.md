@@ -169,7 +169,7 @@ Create dashboards in Checkmk to visualize AP health, performance, and alarms.
 
 Example Checkmk Output
 plaintext
-Copy
+```
 <<<xiq_ap_health>>>
 AP1 Online 30d 12h 34m
 AP2 Offline 0d 0h 0m
@@ -181,6 +181,7 @@ AP2 CPU 80% Memory 90% Clients 50
 <<<xiq_ap_alarms>>>
 AP1 Critical High CPU Usage
 AP2 Warning Firmware Update Required
+```
 Summary
 By leveraging the XIQ API, you can monitor a wide range of metrics for Access Points, including health, performance, configuration, and alarms. Integrating these metrics into Checkmk will provide comprehensive visibility into your wireless network and help you proactively address issues.
 
