@@ -1,2 +1,2 @@
-python3 rfc-test.py --ashost vhkush11ci.hec.k-plus-s.net --sysnr 00  --client 003 --user TEC-SAP-MON --passwd ***REDACTED-SAP-PASSWORD***
+python3 rfc-test.py --ashost xxxxxx.domain.net --sysnr 00  --client 00 --user XXXXXXXX --passwd XXXXXXXXXXX
 
