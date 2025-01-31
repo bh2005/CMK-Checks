@@ -202,4 +202,4 @@ def read_csv_and_create_locations():
 
 
 if __name__ == "__main__":
-    read_csv_and_create_
+    read_csv_and_create_locations()
