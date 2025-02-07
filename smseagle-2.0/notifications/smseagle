@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# SMSEagle
+# Bulk: no
+
+# +-----------------------------------------------------------------------------------+
+# |     _____   _____                                                                 |
+# |    / __/ | / / _ |    Copyright   : (C) 2023 SVA System Vertrieb Alexander GmbH   |
+# |   _\ \ | |/ / __ |    License     : GNU General Public License v2                 |
+# |  /___/ |___/_/ |_|    Author      : Benedikt Bayer <benedikt.bayer@sva.de>        |
+# |                                                                                   |
+# +-----------------------------------------------------------------------------------+
+
+import requests, sys, urllib3
+from cmk.notification_plugins import utils
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+default_host_content = """Host:     $HOSTNAME$
+Alias:    $HOSTALIAS$
+Event:    $EVENT_TXT$
+Output:   $HOSTOUTPUT$"""
+
+default_service_content = """Host:     $HOSTNAME$
+Alias:    $HOSTALIAS$
+Service:  $SERVICEDESC$
+Event:    $EVENT_TXT$
+Output:   $SERVICEOUTPUT$"""
+
+
+def construct_content(context):
+    notification_type = context["NOTIFICATIONTYPE"]
+    if notification_type in ["PROBLEM", "RECOVERY"]:
+        txt_info = "$PREVIOUS@HARDSHORTSTATE$ -> $@SHORTSTATE$"
+    elif notification_type.startswith("FLAP"):
+        if "START" in notification_type:
+            txt_info = "Started Flapping"
+        else:
+            txt_info = "Stopped Flapping ($@SHORTSTATE$)"
+    elif notification_type.startswith("DOWNTIME"):
+        what = notification_type[8:].title()
+        txt_info = "Downtime " + what + " ($@SHORTSTATE$)"
+    elif notification_type == "ACKNOWLEDGEMENT":
+        txt_info = "Acknowledged ($@SHORTSTATE$)"
+    elif notification_type == "CUSTOM":
+        txt_info = "Custom Notification ($@SHORTSTATE$)"
+    else:
+        txt_info = notification_type  # Should neven happen
+
+    context["EVENT_TXT"] = txt_info.replace("@", context["WHAT"])
+
+    if context["WHAT"] == "SERVICE":
+        template = context.get("PARAMETER_CONTENT_SERVICE") or default_service_content
+    else:
+        template = context.get("PARAMETER_CONTENT_HOST") or default_host_content
+    return utils.substitute_context(template=template, context=context)
+
+
+def main():
+    # Get notification context
+    context = utils.collect_context()
+
+    # Get contact name and pager
+    contact_pager = context.get("CONTACTPAGER")
+    contact_name = context.get("CONTACTNAME")
+
+    # Fail if contact has no pager set
+    if not contact_pager:
+        sys.stdout.write(f"Cannot send SMS: {contact_name} has no pager set\n")
+        sys.exit(0)
+    # Define params for api call
+    params = {
+        'login': context['PARAMETER_USERNAME'],
+        'pass': context['PARAMETER_PASSWORD'],
+        'to': contact_pager,
+        'message': construct_content(context),
+    }
+
+    # Get eagle host(s)
+    eaglehosts = [val for key, val in context.items() if key.startswith('PARAMETER_HOST_')]
+
+    for eaglehost in eaglehosts:
+        sys.stdout.write(f"Trying to send SMS from {eaglehost}\n")
+
+        url = f"https://{eaglehost}/index.php/http_api/send_sms"
+        try:
+            req = requests.get(url, params=params, timeout=20, verify=False)
+            if req.text.startswith('OK'):
+                sys.stdout.write(f"SMS successfully sent from {eaglehost}\n")
+                sys.exit(0)
+            else:
+                sys.stdout.write(f"{req.text}\n")
+
+        except Exception as e:
+            sys.stdout.write(f"{e}\n")
+        sys.stdout.write(f"Failed to send SMS from {eaglehost}\n")
+
+    sys.stdout.write("Could not send SMS with any of the defined gateways\n")
+    sys.exit(1)
+
+
+main()
