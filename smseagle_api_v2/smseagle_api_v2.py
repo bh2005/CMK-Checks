@@ -38,7 +38,7 @@ def send_message(url, payload, headers, disable_ssl=False):
     """Sends a message to the SMS Eagle API and logs all responses."""
     response = None  # Initialize response to None
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), verify=False)
+        response = requests.post(url, headers=headers, data=json.dumps(payload), verify=False) # verify=not disable_ssl to use with verify
         response.raise_for_status()
         try:  # Nested try-except for JSON decoding
             response_data = response.json()
