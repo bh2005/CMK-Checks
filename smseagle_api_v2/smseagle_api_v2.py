@@ -38,7 +38,7 @@ def send_message(url, payload, headers, disable_ssl=False):
     """Sends a message to the SMS Eagle API and logs all responses."""
     response = None  # Initialize response to None
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), verify=False) # verify=not disable_ssl to use with verify
+        response = requests.post(url, headers=headers, data=json.dumps(payload), verify=False)
         response.raise_for_status()
         try:  # Nested try-except for JSON decoding
             response_data = response.json()
@@ -159,4 +159,37 @@ if __name__ == "__main__":
     if args.to:
         target["to"] = [args.to]
     if args.contacts:
-        target["contacts"] = [int(id
+        target["contacts"] = [int(id) for id in args.contacts.split(",")]
+    if args.groups:
+        target["groups"] = [int(id) for id in args.groups.split(",")]
+
+    # Check if at least one recipient is specified
+    if not (target.get("to") or target.get("contacts") or target.get("groups")):
+        print("""Error: At least one of the parameters 'to', 'contacts', or 'groups' is required.""")
+        sys.exit(1)
+
+    if action == "sms":
+        if not text:
+            print("Error: The 'text' parameter is required for SMS messages.")
+            sys.exit(1)
+        success, data = send_message_type("sms", target, text=text, modem_no=modem_no, disable_ssl=disable_ssl)
+    elif action == "call_tts":  # Correct indentation (4 spaces)
+        if not text:          # Correct indentation (8 spaces)
+            print("Error: The 'text' parameter is required for TTS calls.")
+            sys.exit(1)      # Correct indentation (8 spaces)
+        success, data = send_message_type("call_tts", target, text=text, modem_no=modem_no, disable_ssl=disable_ssl)
+    elif action == "wave":      # Correct indentation (4 spaces)
+        if not wave_id:      # Correct indentation (8 spaces)
+            print("Error: The 'wave_id' parameter is required for Wave calls.")
+            sys.exit(1)      # Correct indentation (8 spaces)
+        success, data = send_message_type("wave", target, wave_id=wave_id, modem_no=modem_no, disable_ssl=disable_ssl)
+    else:                  # Correct indentation (4 spaces)
+        print("Invalid action. Use 'sms', 'call_tts', or 'wave'.") # Correct indentation (8 spaces)
+        sys.exit(1)          # Correct indentation (8 spaces)
+
+    if success:          # Correct indentation (4 spaces)
+        logger.info("Action performed successfully.")  # Log success
+        # print(data)  # For debugging: print complete data
+    else:                  # Correct indentation (4 spaces)
+        logger.error("Action failed.")  # Log failure
+        # print(data)  # For debugging: print complete data
