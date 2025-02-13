@@ -33,7 +33,7 @@ Erstellen Sie eine Datei namens `config.json` im selben Verzeichnis wie das Skri
 
 ```json
 {
-  "smseagleip1": "IP-Adresse des ersten SMS Eagle Servers",
+  "smseagleip1": "http://IP-Adresse des ersten SMS Eagle Servers/",
   "smseagleip2": "IP-Adresse des zweiten SMS Eagle Servers (optional)",
   "access-token1": "Access Token für den ersten SMS Eagle Server",
   "access-token2": "Access Token für den zweiten SMS Eagle Server (optional)"
