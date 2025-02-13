@@ -1,4 +1,4 @@
-# smseagle_api_v2.py
+.md# smseagle_api_v2.py
 
 Dieses Python-Skript ermöglicht das Versenden von SMS-, TTS- (Text-to-Speech) und Wave-Nachrichten über die SMS Eagle API. Es verwendet die `argparse`-Bibliothek zur Verarbeitung von Kommandozeilenargumenten, die `requests`-Bibliothek für HTTP-Anfragen und die `logging`-Bibliothek zur Protokollierung.
 
