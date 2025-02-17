@@ -1,4 +1,4 @@
-# smseagle_api_v2.py
+.md# smseagle_api_v2.py
 
 Dieses Python-Skript ermöglicht das Versenden von SMS-, TTS- (Text-to-Speech) und Wave-Nachrichten über die SMS Eagle API. Es verwendet die `argparse`-Bibliothek zur Verarbeitung von Kommandozeilenargumenten, die `requests`-Bibliothek für HTTP-Anfragen und die `logging`-Bibliothek zur Protokollierung.
 
@@ -33,7 +33,7 @@ Erstellen Sie eine Datei namens `config.json` im selben Verzeichnis wie das Skri
 
 ```json
 {
-  "smseagleip1": "IP-Adresse des ersten SMS Eagle Servers",
+  "smseagleip1": "http://IP-Adresse des ersten SMS Eagle Servers/",
   "smseagleip2": "IP-Adresse des zweiten SMS Eagle Servers (optional)",
   "access-token1": "Access Token für den ersten SMS Eagle Server",
   "access-token2": "Access Token für den zweiten SMS Eagle Server (optional)"
