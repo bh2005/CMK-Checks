@@ -75,13 +75,13 @@ def parse_if64name(string_table: StringByteTable) -> interfaces.Section:
         # Fetch VLAN ID for this interface
         vlan_id = get_vlan_id(if_index, string_table.snmp_session) # Get the VLAN ID
 
-        # if_data.append([if_index, if_name, vlan_id]) # Append as a list for if64.parse_if64
+        if_data.append([if_index, if_name, vlan_id]) # Append as a list for if64.parse_if64
         
-        section = if64.parse_if64(StringByteTable(if_data)) # Create StringByteTable and parse
-        section = section + ([if_index, if_name, vlan_id]) # hier musst du schauen wie du das mit dran hängst
-    return section
+    #     section = if64.parse_if64(StringByteTable(if_data)) # Create StringByteTable and parse
+    #     section = section + ([if_index, if_name, vlan_id]) # hier musst du schauen wie du das mit dran hängst
+    # return section
 
-    # return if64.parse_if64(StringByteTable(if_data)) # Create StringByteTable and parse
+    return if64.parse_if64(StringByteTable(if_data)) # Create StringByteTable and parse
 
 def get_vlan_id(if_index, snmp_session):
     """Retrieves the VLAN ID for a given interface index."""
