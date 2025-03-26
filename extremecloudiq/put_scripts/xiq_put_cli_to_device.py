@@ -16,9 +16,7 @@ logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
 log = logging.getLogger(__name__)
 
 def generate_xiq_api_key(username, password):
-    # Generate new API key using username and password
-    # Returns:
-    #     str: API key if successful, None if failed
+    # (Ihr vorhandener Code)
     url = f"{XIQ_BASE_URL}/login"
     headers = {"Content-Type": "application/json"}
     data = {"username": username, "password": password}
@@ -42,9 +40,7 @@ def generate_xiq_api_key(username, password):
         return None
 
 def renew_token():
-    # Renew the API token using stored credentials
-    # Returns:
-    #     str: New access token if successful, None if failed
+    # (Ihr vorhandener Code)
     username = os.getenv('ADMIN_MAIL')
     password = os.getenv('XIQ_PASS')
 
@@ -68,12 +64,11 @@ def api_command_execute(id, command):
         "Content-Type": "application/json",
     }
     payload = {
-        "id": id,
-        "command": command,
+        "commands": [command], # commands muss als Array übergeben werden
     }
 
     try:
-        response = requests.post(f"{XIQ_BASE_URL}/your_api_endpoint", headers=headers, data=json.dumps(payload))  # Replace /your_api_endpoint
+        response = requests.post(f"{XIQ_BASE_URL}/devices/{id}/:cli", headers=headers, data=json.dumps(payload))
         response.raise_for_status()
         log.info(f"Command for ID {id} executed successfully: {response.json()}")
     except requests.exceptions.RequestException as e:
