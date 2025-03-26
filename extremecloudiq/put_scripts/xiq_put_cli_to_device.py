@@ -17,7 +17,7 @@ import requests
 import json
 import os
 import logging
-import argparse # Importieren Sie das argparse-Modul
+import argparse
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
@@ -85,20 +85,27 @@ def api_command_execute(id, command):
     try:
         response = requests.post(f"{XIQ_BASE_URL}/devices/{id}/:cli", headers=headers, data=json.dumps(payload))
         response.raise_for_status()
-        log.info(f"Command for ID {id} executed successfully: {response.json()}")
+        response_json = response.json()
+        log.info(f"Command for ID {id} executed successfully: {response_json}")
+        print(f"Command for ID {id} executed successfully: {response_json}") #Ausgabe auf StdOut
     except requests.exceptions.RequestException as e:
         log.error(f"Error executing command for ID {id}: {e}")
+        print(f"Error executing command for ID {id}: {e}") #Ausgabe auf StdOut
         # Check if the error is due to an expired token, and renew it.
         if response.status_code == 401:  # Assuming 401 is unauthorized
             log.warning("Token expired, attempting to renew")
+            print("Token expired, attempting to renew") #Ausgabe auf StdOut
             if renew_token():
                 log.info("Token renewal successful, retrying request")
+                print("Token renewal successful, retrying request") #Ausgabe auf StdOut
                 # Retry the request after token renewal
                 api_command_execute(id, command)
             else:
                 log.error("Token renewal failed. Request not retried.")
+                print("Token renewal failed. Request not retried.") #Ausgabe auf StdOut
         else:
             log.error(f"Error executing command. Error Code: {response.status_code}")
+            print(f"Error executing command. Error Code: {response.status_code}") #Ausgabe auf StdOut
 
 def csv_commands_execute(csv_file):
     with open(csv_file, "r") as file:
@@ -110,16 +117,20 @@ def csv_commands_execute(csv_file):
                 api_command_execute(id, command)
             else:
                 log.warning(f"Invalid row in CSV: {row}")
+                print(f"Invalid row in CSV: {row}") #Ausgabe auf StdOut
 
 def main():
     # Check if API_SECRET is available, otherwise renew token
     global API_SECRET  # Access the global API_SECRET variable
     if not API_SECRET:
         log.info("API Secret not found, attempting to renew")
+        print("API Secret not found, attempting to renew") #Ausgabe auf StdOut
         if renew_token():
             log.info("Token renewed successfully, continuing")
+            print("Token renewed successfully, continuing") #Ausgabe auf StdOut
         else:
             log.error("Token renewal failed, exiting.")
+            print("Token renewal failed, exiting.") #Ausgabe auf StdOut
             return
 
     csv_commands_execute(CSV_FILE)
