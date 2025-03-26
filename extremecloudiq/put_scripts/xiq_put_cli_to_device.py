@@ -1,3 +1,17 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+#
+# License: GNU General Public License v2
+#
+# Author: bh2005
+# URL  : https://github.com/bh2005
+# Date : 2025-03-26
+#
+# This script send cli commands from a CSV to the XIQ API
+#
+# Release notes - init release
+
 import csv
 import requests
 import json
