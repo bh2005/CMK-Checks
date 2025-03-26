@@ -17,6 +17,7 @@ import requests
 import json
 import os
 import logging
+import argparse # Importieren Sie das argparse-Modul
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
@@ -124,4 +125,15 @@ def main():
     csv_commands_execute(CSV_FILE)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Execute CLI commands on ExtremeCloud IQ devices via API.")
+    parser.add_argument("-c", "--csv", help="Path to the CSV file containing device IDs and commands.", default="commands.csv")
+    parser.add_argument("-l", "--log", help="Path to the log file.", default="xiq_api.log")
+    args = parser.parse_args()
+
+    CSV_FILE = args.csv
+    LOG_FILE = args.log
+
+    logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                        format="%(asctime)s - %(levelname)s - %(message)s")
+
     main()
