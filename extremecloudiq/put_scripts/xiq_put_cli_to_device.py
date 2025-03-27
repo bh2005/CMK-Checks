@@ -11,6 +11,7 @@
 # This script send cli commands from a CSV to the XIQ API
 #
 # Release notes - init release
+# 0.1 change input format to JSON
 
 import requests
 import json
@@ -143,5 +144,28 @@ if __name__ == "__main__":
 
     logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                         format="%(asctime)s - %(levelname)s - %(message)s")
+
+    # Füge Beispiel JSON zur Hilfe hinzu
+    parser.epilog = """
+    Example JSON File (commands.json):
+    {
+      "devices": [
+        {
+          "id": "123",
+          "commands": [
+            "configure vlan 10",
+            "show interface status"
+          ]
+        },
+        {
+          "id": "456",
+          "commands": [
+            "reboot device",
+            "show version"
+          ]
+        }
+      ]
+    }
+    """
 
     main()
