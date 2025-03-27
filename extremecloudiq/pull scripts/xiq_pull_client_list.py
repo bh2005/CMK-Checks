@@ -178,6 +178,15 @@ def main():
     parser.add_argument("--sort", help="Field to sort by.")
     parser.add_argument("--dir", choices=["asc", "desc"], help="Sort direction (asc or desc).")
     parser.add_argument("--where", help="Filter criteria (e.g., 'name=test').")
+
+    # Beispiele in die Hilfemeldung einfügen
+    parser.epilog = """
+    Examples:
+        python get_client_list.py summary
+        python get_client_list.py detail --page all -l my_client_list.log
+        python get_client_list.py detail --page_size 50 --sort name --dir asc --where 'name=test'
+    """
+
     args = parser.parse_args()
 
     views = args.views
@@ -188,10 +197,4 @@ def main():
     dir = args.dir
     where = args.where
 
-    logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
-                        format="%(asctime)s - %(levelname)s - %(message)s")
-
-    if page.lower() == "all":
-        client_data = fetch_all_clients(views, page_size, sort, dir, where)
-    else:
-        client_data = get_client
+    logging.basicConfig(filename=
