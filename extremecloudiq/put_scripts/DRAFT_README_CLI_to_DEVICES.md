@@ -1,6 +1,6 @@
 # ExtremeCloud IQ CLI Command Execution Script
 
-This Python script executes CLI commands on ExtremeCloud IQ devices via the API.
+This Python script executes CLI commands on ExtremeCloud IQ devices via the API, using JSON as the input format.
 
 ## Prerequisites
 
@@ -12,17 +12,32 @@ This Python script executes CLI commands on ExtremeCloud IQ devices via the API.
     ```
 
 * Environment variables `ADMIN_MAIL` and `XIQ_PASS` for API authentication.
-* A CSV file containing device IDs and CLI commands (default: `commands.csv`).
+* A JSON file containing device IDs and CLI commands (default: `commands.json`).
 
 ## Usage
 
 1.  Save the Python script as `xiq_cli_execute.py`.
-2.  Create a CSV file with device IDs and CLI commands in the following format:
+2.  Create a JSON file with device IDs and CLI commands in the following format:
 
-    ```csv
-    123,configure vlan 10
-    456,show interface status
-    789,reboot device
+    ```json
+    {
+      "devices": [
+        {
+          "id": "123",
+          "commands": [
+            "configure vlan 10",
+            "show interface status"
+          ]
+        },
+        {
+          "id": "456",
+          "commands": [
+            "reboot device",
+            "show version"
+          ]
+        }
+      ]
+    }
     ```
 
 3.  Run the script:
@@ -33,7 +48,7 @@ This Python script executes CLI commands on ExtremeCloud IQ devices via the API.
 
 ## Options
 
-* `-c` or `--csv`: Specifies the path to the CSV file. Defaults to `commands.csv`.
+* `-j` or `--json`: Specifies the path to the JSON file. Defaults to `commands.json`.
 * `-l` or `--log`: Specifies the path to the log file. Defaults to `xiq_api.log`.
 * `-h` or `--help`: Displays a help message with the available options.
 
@@ -45,10 +60,10 @@ This Python script executes CLI commands on ExtremeCloud IQ devices via the API.
     python xiq_cli_execute.py
     ```
 
-* Specify a custom CSV file:
+* Specify a custom JSON file:
 
     ```bash
-    python xiq_cli_execute.py -c my_commands.csv
+    python xiq_cli_execute.py -j my_commands.json
     ```
 
 * Specify a custom log file:
@@ -77,7 +92,7 @@ https://github.com/bh2005
 
 ## Date
 
-2025-03-26
+2024-03-27
 
 ## Release Notes
 
@@ -93,6 +108,6 @@ The script attempts to detect and renew expired API tokens.
 
 ## Important Notes
 
-* Ensure that the device IDs and CLI commands in the CSV file are correct.
+* Ensure that the device IDs and CLI commands in the JSON file are correct.
 * Thoroughly test the script in a test environment before using it in production.
 * Consult the ExtremeCloud IQ API documentation for more information about the available API endpoints and commands.
