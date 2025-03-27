@@ -1,0 +1,18 @@
+{
+  "devices": [
+    {
+      "id": "123",
+      "commands": [
+        "configure vlan 10",
+        "show interface status"
+      ]
+    },
+    {
+      "id": "456",
+      "commands": [
+        "reboot device",
+        "show version"
+      ]
+    }
+  ]
+}
