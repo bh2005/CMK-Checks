@@ -1,6 +1,10 @@
-# ExtremeCloud IQ Client List Retrieval Script
+# ExtremeCloud IQ Client List Retrieval Script (get_client_list.py)
 
-This Python script retrieves the client list from ExtremeCloud IQ via the API and outputs it to JSON and CSV files. It supports pagination to retrieve all available data.
+This script retrieves the client list from ExtremeCloud IQ via the API and saves the results to JSON and CSV files. It supports pagination and various views.
+
+## Purpose
+
+This script is intended for use in CMK-Checks environments to collect and analyze client data from ExtremeCloud IQ.
 
 ## Prerequisites
 
@@ -25,7 +29,7 @@ This Python script retrieves the client list from ExtremeCloud IQ via the API an
 
 ## Options
 
-* `<views>`: The `views` parameter for the API request (e.g., `summary`, `detail`). Required.
+* `<views>`: The `views` parameter for the API request (e.g., `basic`, `detail`, `status`, `metrics`, `location`, `full`). Defaults to `basic`.
 * `-l` or `--log`: Path to the log file. Defaults to `client_list.log`.
 * `--page`: Page number for pagination or `all` to retrieve all pages. Defaults to `1`.
 * `--page_size`: Number of items per page. Defaults to `100`.
@@ -35,10 +39,10 @@ This Python script retrieves the client list from ExtremeCloud IQ via the API an
 
 ## Examples
 
-* Retrieve the client list with the `summary` view:
+* Retrieve the client list with the default view (`basic`):
 
     ```bash
-    python get_client_list.py summary
+    python get_client_list.py basic
     ```
 
 * Retrieve all pages of the client list with the `detail` view and save to a custom log file:
@@ -59,6 +63,12 @@ The script outputs the client list to two files:
 
 * `all_clients.json`: Client list in JSON format.
 * `all_clients.csv`: Client list in CSV format.
+
+## Integration into CMK-Checks
+
+1.  Place the script and output files in the appropriate CMK-Checks directory.
+2.  Configure a CMK-Check to run the script periodically.
+3.  Use the output files (`all_clients.json` or `all_clients.csv`) as a data source for your CMK-Checks.
 
 ## License
 
