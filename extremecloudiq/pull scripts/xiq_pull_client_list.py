@@ -6,7 +6,7 @@
 #
 # Author: bh2005
 # URL  : https://github.com/bh2005
-# Date : 2024-03-27
+# Date : 2024-03-01
 #
 # This script retrieves the client list from ExtremeCloud IQ via the API and outputs it to JSON and CSV files.
 # It handles pagination to retrieve all available data.
@@ -155,7 +155,7 @@ def write_csv(data, filename="clients.csv"):
         for client in data:
             writer.writerow(client.values())
     log.info(f"Client list written to {filename}")
-
+  
 def main():
     # Check if API_SECRET is available, otherwise renew token
     global API_SECRET  # Access the global API_SECRET variable
@@ -171,7 +171,7 @@ def main():
             return
 
     parser = argparse.ArgumentParser(description="Retrieves the client list from ExtremeCloud IQ via the API and outputs it to JSON and CSV files.")
-    parser.add_argument("views", help="The views parameter for the API request (e.g., summary, detail).")
+    parser.add_argument("views", choices=['basic', 'detail', 'status', 'metrics', 'location', 'full'], default='basic', help="The views parameter for the API request (basic, detail, status, metrics, location, full).")
     parser.add_argument("-l", "--log", help="Path to the log file.", default="client_list.log")
     parser.add_argument("--page", type=str, default="1", help="Page number for pagination or 'all' to retrieve all pages.")
     parser.add_argument("--page_size", type=int, default=100, help="Number of items per page.")
@@ -182,7 +182,7 @@ def main():
     # Beispiele in die Hilfemeldung einfügen
     parser.epilog = """
     Examples:
-        python get_client_list.py summary
+        python get_client_list.py basic
         python get_client_list.py detail --page all -l my_client_list.log
         python get_client_list.py detail --page_size 50 --sort name --dir asc --where 'name=test'
     """
