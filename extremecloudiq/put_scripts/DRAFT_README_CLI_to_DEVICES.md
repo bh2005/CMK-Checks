@@ -110,4 +110,4 @@ The script attempts to detect and renew expired API tokens.
 
 * Ensure that the device IDs and CLI commands in the JSON file are correct.
 * Thoroughly test the script in a test environment before using it in production.
-* Consult the ExtremeCloud IQ API documentation for more information about the available API endpoints and commands.
+* Consult the [ExtremeCloud IQ API documentation](https://api.extremecloudiq.com/) for more information about the available API endpoints and parameters.
