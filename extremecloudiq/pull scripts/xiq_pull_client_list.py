@@ -197,4 +197,17 @@ def main():
     dir = args.dir
     where = args.where
 
-    logging.basicConfig(filename=
+    logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
+                        format="%(asctime)s - %(levelname)s - %(message)s")
+
+    if page.lower() == "all":
+        client_data = fetch_all_clients(views, page_size, sort, dir, where)
+    else:
+        client_data = get_client_list(views, int(page), page_size, sort, dir, where)
+
+    if client_data:
+        write_json(client_data, "all_clients.json")
+        write_csv(client_data, "all_clients.csv")
+
+if __name__ == "__main__":
+    main()
