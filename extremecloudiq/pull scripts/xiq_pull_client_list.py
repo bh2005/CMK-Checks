@@ -90,7 +90,7 @@ def get_client_list(views, page=1, limit=100, sort=None, dir=None, where=None):
     }
 
     try:
-        response = requests.get(f"{XIQ_BASE_URL}/clients", headers=headers, params=params)
+        response = requests.get(f"{XIQ_BASE_URL}/clients/active", headers=headers, params=params)
         response.raise_for_status()
         response_json = response.json()
         log.info(f"Client list retrieved successfully with parameters: {params}")
