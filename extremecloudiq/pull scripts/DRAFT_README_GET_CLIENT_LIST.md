@@ -64,12 +64,6 @@ The script outputs the client list to two files:
 * `all_clients.json`: Client list in JSON format.
 * `all_clients.csv`: Client list in CSV format.
 
-## Integration into CMK-Checks
-
-1.  Place the script and output files in the appropriate CMK-Checks directory.
-2.  Configure a CMK-Check to run the script periodically.
-3.  Use the output files (`all_clients.json` or `all_clients.csv`) as a data source for your CMK-Checks.
-
 ## License
 
 This script is licensed under the GNU General Public License v2.
