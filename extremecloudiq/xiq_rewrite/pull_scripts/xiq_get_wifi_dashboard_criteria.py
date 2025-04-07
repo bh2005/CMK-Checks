@@ -5,7 +5,10 @@ import requests
 import json
 import os
 import logging
+import sys
+sys.path.append('..')
 import modules.xiq_api_auth  # Importieren Sie das Modul aus dem Unterverzeichnis
+
 
 # API Configuration (use environment variables)
 XIQ_BASE_URL = 'https://api.extremecloudiq.com'
@@ -36,7 +39,7 @@ def main():
     logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                         format="%(asctime)s - %(levelname)s - %(message)s")
 
-    api_token = modules.xiq_api_auth.get_xiq_api_token()
+    api_token = modules.xiq_api_auth.renew_token()
 
     if api_token:
         criteria_data = get_dashboard_criteria(api_token)
