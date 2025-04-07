@@ -22,6 +22,8 @@ import argparse
 import csv
 import time
 from tqdm import tqdm
+import sys
+sys.path.append('..')
 import modules.xiq_api_auth  # Importieren Sie das Modul aus dem Unterverzeichnis
 
 # API Configuration (use environment variables)
