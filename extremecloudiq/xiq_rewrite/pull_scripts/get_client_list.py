@@ -134,7 +134,7 @@ def main():
             print("Token renewal failed, exiting.")
             return
 
-parser = argparse.ArgumentParser(description="Retrieves the client list from ExtremeCloud IQ via the API and outputs it to JSON and CSV files.")
+    parser = argparse.ArgumentParser(description="Retrieves the client list from ExtremeCloud IQ via the API and outputs it to JSON and CSV files.")
     parser.add_argument("views", choices=['basic', 'detail', 'status', 'metrics', 'location', 'full'], default='basic', help="The views parameter for the API request (basic, detail, status, metrics, location, full).")
     parser.add_argument("-l", "--log", help="Path to the log file.", default="client_list.log")
     parser.add_argument("--page", type=str, default="1", help="Page number for pagination or 'all' to retrieve all pages.")
