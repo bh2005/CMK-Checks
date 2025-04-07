@@ -18,7 +18,9 @@ import logging
 import argparse
 import time
 from tqdm import tqdm
-import modules.xiq_api_auth # nutzt das Modul aus dem Unterverzeichnis
+import sys
+sys.path.append('..')
+import modules.xiq_api_auth  # Importieren Sie das Modul aus dem Unterverzeichnis
 
 # API Configuration (use environment variables)
 API_SECRET = os.getenv('XIQ_API_SECRET')
