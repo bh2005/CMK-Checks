@@ -10,7 +10,7 @@ import sys
 from enum import Enum
 
 # Pfad zum Zertifikat
-cert_path = "/usr/local/share/ca-certificates/root_ks.crt"
+cert_path = "/usr/local/share/ca-certificates/cert.crt"
 
 # create session object
 session = requests.session()
