@@ -339,7 +339,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--nodeName", dest="nodeName", help="Name des Zielknotens (Standard: PythonRestClient)", default="PythonRestClient", metavar="NAME")
     parser.add_argument("-i", "--itemName", dest="itemName", help="Name des Ziel-Items (Standard: RandomData-<Zufallszahl>)", default="RandomData-" + str(random.randint(1, 100001)), metavar="NAME")
     parser.add_argument("-e", "--eventsToWrite", dest="eventsToWrite", help="Anzahl der zu schreibenden Events (Standard: 10)", default=10, type=int, metavar="COUNT")
-    parser.add_argument("--no-proxy", action="store_true", help="Deaktiviert die Verwendung von Proxies")
+    parser.add_argument("--no-proxy", action="store_true", default=True, help="Deaktiviert die Verwendung von Proxies (Standard)")
     parser.add_argument("--proxy", dest="proxy_url", help="Verwendet den angegebenen Proxy (z.B., http://user:pass@host:port)", metavar="URL")
     parser.add_argument("--verify-ssl", action="store_true", default=True, help="Aktiviert die SSL-Zertifikatsprüfung (Standard: True)")
     parser.add_argument("--list-nodes", action="store_true", help="Listet alle Knoten in der angegebenen Datenbank mit ihrem Status für Checkmk auf")
@@ -370,11 +370,11 @@ if __name__ == '__main__':
         if verbose:
             print(f"Verwendet Proxy: {args.proxy_url}")
     elif args.no_proxy:
-        set_no_proxy()
+        set_no_proxy() # Rufe set_no_proxy auf, wenn --no-proxy (Standard) aktiv ist
         if verbose:
-            print("Verwendet keine Proxies (Option --no-proxy gesetzt).")
-    elif verbose:
-        print("Verwendet keine explizit konfigurierten Proxies (systemweite Einstellungen könnten aktiv sein).")
+            print("Verwendet keine Proxies (Standard oder Option --no-proxy gesetzt).")
+    elif verbose and not args.proxy_url: # Nur ausgeben, wenn --proxy nicht gesetzt ist
+        print("Verwendet keine explizit konfigurierten Proxies (Standard).")
 
     ts = datetime.datetime.now() - datetime.timedelta(milliseconds=args.eventsToWrite)
     te = datetime.datetime.now()
