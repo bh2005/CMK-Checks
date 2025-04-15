@@ -82,6 +82,3 @@ Weitere Optionen:
 * Die Zeitstempel für `--start-time` und `--end-time` müssen im ISO-Format angegeben werden.
 * Das Skript führt grundlegende Fehlerbehandlung durch, aber es ist ratsam, die Serverantworten und Fehlermeldungen sorgfältig zu prüfen.
 
-## Lizenz
-
-[Hier ggf. Lizenzinformationen einfügen]
