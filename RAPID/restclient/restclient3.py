@@ -10,7 +10,8 @@ import random
 from argparse import ArgumentParser
 from enum import Enum
 import datetime
-from jsonschema import validate  # Für die JSON-Schema-Validierung
+from jsonschema import validate
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,14 +36,21 @@ class UnexpectedStatusError(requests.exceptions.RequestException):
         super().__init__(f"Unerwarteter Statuscode: {response.status_code} (erwartet: {expected_status}) für URL: {response.url}")
 
 class RestClient2:
-    def __init__(self,
-                 base_url: str,
-                 api_key: str,
-                 verify_ssl: bool = True,
-                 proxies: Optional[Dict[str, str]] = None,
-                 username: Optional[str] = None,
-                 password: Optional[str] = None,
-                 timeout: int = 10):
+    """Eine Klasse für die Interaktion mit einer REST-API."""
+
+    def __init__(self, base_url: str, api_key: str, verify_ssl: bool = True, proxies: Optional[Dict[str, str]] = None, username: Optional[str] = None, password: Optional[str] = None, timeout: int = 10):
+        """
+        Initialisiert eine neue RestClient2-Instanz.
+
+        Args:
+            base_url (str): Die Basis-URL der REST-API (z.B., "https://api.example.com").
+            api_key (str): Der API-Schlüssel für die Authentifizierung.
+            verify_ssl (bool, optional): Gibt an, ob SSL-Zertifikate überprüft werden sollen. Standardmäßig True.
+            proxies (Optional[Dict[str, str]], optional): Ein Dictionary von Proxies für HTTP und HTTPS. Standardmäßig None.
+            username (Optional[str], optional): Benutzername für die Basic Auth. Standardmäßig None.
+            password (Optional[str], optional): Passwort für die Basic Auth. Standardmäßig None.
+            timeout (int, optional): Der Timeout für API-Anfragen in Sekunden. Standardmäßig 10.
+        """
         self.base_url: str = base_url
         self.api_key: str = api_key
         self.verify_ssl: bool = verify_ssl
@@ -54,7 +62,27 @@ class RestClient2:
         logging.basicConfig(level=logging.INFO)
         self.headers: Dict[str, str] = {'Content-type': 'application/json', 'Accept': 'text/plain', 'Authorization': f'Bearer {self.api_key}'}
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(requests.exceptions.RequestException)
+    )
     def _request(self, method: str, endpoint: str, headers: Optional[Dict[str, str]] = None, **kwargs: Any) -> requests.Response:
+        """
+        Führt eine HTTP-Anfrage mit den angegebenen Parametern aus.
+
+        Args:
+            method (str): Die HTTP-Methode (z.B., 'GET', 'POST', 'PUT', 'DELETE').
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+            **kwargs: Zusätzliche Keyword-Argumente, die an requests.request übergeben werden.
+
+        Returns:
+            requests.Response: Das Response-Objekt der Anfrage.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt (nach mehreren Wiederholungsversuchen).
+        """
         url = f"{self.base_url}{endpoint}"
         request_headers = self.headers.copy()
         if headers:
@@ -73,22 +101,97 @@ class RestClient2:
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            self.logger.error(f"Request failed for {method} {url}: {e}")
+            self.logger.error(f"Fehler bei Anfrage {method} {url}: {e} (Retry)")
             raise
 
     def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        """
+        Sendet eine HTTP GET-Anfrage an den angegebenen Endpunkt.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts (z.B., "/users").
+            params (Optional[Dict[str, Any]], optional): Ein Dictionary von Query-Parametern. Standardmäßig None.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+
+        Returns:
+            requests.Response: Das Response-Objekt der Anfrage.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+        """
         return self._request('GET', endpoint, params=params, headers=headers)
 
     def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        """
+        Sendet eine HTTP POST-Anfrage an den angegebenen Endpunkt.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            data (Optional[Dict[str, Any]], optional): Die Daten, die als Form-Daten gesendet werden sollen. Standardmäßig None.
+            json (Optional[Dict[str, Any]], optional): Die Daten, die als JSON-Body gesendet werden sollen. Standardmäßig None.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+
+        Returns:
+            requests.Response: Das Response-Objekt der Anfrage.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+        """
         return self._request('POST', endpoint, data=data, json=json, headers=headers)
 
     def put(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        """
+        Sendet eine HTTP PUT-Anfrage an den angegebenen Endpunkt.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            data (Optional[Dict[str, Any]], optional): Die Daten, die als Form-Daten gesendet werden sollen. Standardmäßig None.
+            json (Optional[Dict[str, Any]], optional): Die Daten, die als JSON-Body gesendet werden sollen. Standardmäßig None.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+
+        Returns:
+            requests.Response: Das Response-Objekt der Anfrage.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+        """
         return self._request('PUT', endpoint, data=data, json=json, headers=headers)
 
     def delete(self, endpoint: str, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        """
+        Sendet eine HTTP DELETE-Anfrage an den angegebenen Endpunkt.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+
+        Returns:
+            requests.Response: Das Response-Objekt der Anfrage.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+        """
         return self._request('DELETE', endpoint, headers=headers)
 
     def get_json(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
+        """
+        Sendet eine HTTP GET-Anfrage und verarbeitet die JSON-Antwort.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            params (Optional[Dict[str, Any]], optional): Ein Dictionary von Query-Parametern. Standardmäßig None.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+            expected_status (int, optional): Der erwartete HTTP-Statuscode der Antwort. Standardmäßig 200.
+            schema (Optional[Dict[str, Any]], optional): Ein JSON-Schema zur Validierung der Antwort. Standardmäßig None.
+
+        Returns:
+            Any: Die geparsten JSON-Daten aus der Antwort.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+            UnexpectedStatusError: Wenn der Statuscode der Antwort nicht dem erwarteten Wert entspricht.
+            jsonschema.exceptions.ValidationError: Wenn die JSON-Antwort nicht dem angegebenen Schema entspricht.
+        """
         response = self.get(endpoint, params=params, headers=headers)
         if response.status_code != expected_status:
             raise UnexpectedStatusError(response, expected_status)
@@ -96,6 +199,43 @@ class RestClient2:
         if schema:
             validate(data, schema)
         return data
+
+    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
+        """
+        Sendet eine HTTP POST-Anfrage mit JSON-Daten und verarbeitet die JSON-Antwort.
+
+        Args:
+            endpoint (str): Der relative Pfad des API-Endpunkts.
+            data (Optional[Dict[str, Any]], optional): Die Daten, die als Form-Daten gesendet werden sollen. Standardmäßig None.
+            json (Optional[Dict[str, Any]], optional): Die Daten, die als JSON-Body gesendet werden sollen. Standardmäßig None.
+            headers (Optional[Dict[str, str]], optional): Zusätzliche HTTP-Header. Standardmäßig None.
+            expected_status (int, optional): Der erwartete HTTP-Statuscode der Antwort. Standardmäßig 200.
+            schema (Optional[Dict[str, Any]], optional): Ein JSON-Schema zur Validierung der Antwort. Standardmäßig None.
+
+        Returns:
+            Any: Die geparsten JSON-Daten aus der Antwort.
+
+        Raises:
+            requests.exceptions.RequestException: Wenn ein Fehler bei der Anfrage auftritt.
+            UnexpectedStatusError: Wenn der Statuscode der Antwort nicht dem erwarteten Wert entspricht.
+            jsonschema.exceptions.ValidationError: Wenn die JSON-Antwort nicht dem angegebenen Schema entspricht.
+        """
+        response = self.post(endpoint, data=data, json=json, headers=headers)
+        if response.status_code != expected_status:
+            raise UnexpectedStatusError(response, expected_status)
+        response_data = response.json()
+        if schema:
+            validate(response_data, schema)
+        return response_data
+
+    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
+        response = self.post(endpoint, data=data, json=json, headers=headers)
+        if response.status_code != expected_status:
+            raise UnexpectedStatusError(response, expected_status)
+        response_data = response.json()
+        if schema:
+            validate(response_data, schema)
+        return response_data
 
     def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
         response = self.post(endpoint, data=data, json=json, headers=headers)
@@ -119,6 +259,10 @@ def set_no_proxy():
     logging.info("Proxy-Einstellungen entfernt.")
 
 def main():
+    """
+    Hauptfunktion des Skripts zur Interaktion mit der REST-API.
+    Definiert Kommandozeilenargumente und führt die entsprechenden Aktionen aus.
+    """
     parser = ArgumentParser(description="Interact with a REST API to manage databases, nodes, and items.")
     parser.add_argument("-s", "--server", dest="serverRoot", help="Server address (z.B., https://yourserver:3001)", default="https://localhost:3001", metavar="URL", required=True)
     parser.add_argument("-k", "--apiKey", dest="apiKey", help="API Key für die Authentifizierung (erforderlich)", default=os.getenv('API_KEY'), required=True, metavar="KEY")
@@ -185,6 +329,7 @@ def main():
     try:
         # Helper functions using the RestClient
         def check_db_exists(db_name):
+             """Überprüft, ob die angegebene Datenbank existiert."""
             try:
                 response = api_client.get_json("/api/v1/database")
                 return db_name in [url.split('/')[-1] for url in response]
@@ -193,6 +338,7 @@ def main():
                 return False
 
         def check_node_exists(db_name, node_name):
+            """Überprüft, ob der angegebene Knoten in der Datenbank existiert."""
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node")
                 return node_name in [url.split('/')[-1] for url in response]
@@ -201,6 +347,7 @@ def main():
                 return False
 
         def check_item_exists(db_name, node_name, item_name):
+            """Überprüft, ob das angegebene Item im Knoten existiert."""
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
                 return item_name in [url.split('/')[-1] for url in response]
