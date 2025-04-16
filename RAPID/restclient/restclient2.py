@@ -10,7 +10,7 @@ import sys
 from enum import Enum
 
 # Pfad zum Zertifikat (wird aktuell nicht verwendet, siehe Kommentar im Code)
-cert_path = "/usr/local/share/ca-certificates/root_ks.crt"
+#cert_path = "/usr/local/share/ca-certificates/root_ks.crt"
 
 # create session object
 session = requests.session()
@@ -326,6 +326,25 @@ def ReadProcessData(serverRoot, dbName, nodeName, itemName, startTime, endTime, 
         return None
 
 
+def listItem(requestUri, dbName, nodeName, apiKey, verify_ssl=True, verbose=False, proxies=None):
+    """Listet alle Items eines bestimmten Knotens auf."""
+    headers_copy = headers.copy()
+    headers_copy['Authorization'] = f'Bearer {apiKey}'
+    item_url = f"{requestUri}/api/v1/database/{dbName}/node/{nodeName}/item"
+    if verbose:
+        print(f"Sende GET-Anfrage an: {item_url} mit Headern: {headers_copy}")
+    try:
+        response = session.get(item_url, headers=headers_copy, verify=verify_ssl, proxies=proxies)
+        response.raise_for_status()
+        items_list = response.json()
+        if verbose:
+            print(f"Antwort-Body (listItem): {items_list}")
+        return [item_url.split('/')[-1] for item_url in items_list]
+    except requests.exceptions.RequestException as e:
+        print(f"Fehler beim Abrufen der Item-Liste für Knoten '{nodeName}': {e}")
+        return None
+
+
 if __name__ == '__main__':
     # Setze die Umgebungsvariable PATH, falls sie nicht gesetzt ist (kann in manchen Umgebungen notwendig sein)
     if 'PATH' not in os.environ:
@@ -351,6 +370,7 @@ if __name__ == '__main__':
     parser.add_argument("--create-node", dest="newNodeName", help="Erstellt einen neuen Knoten mit dem angegebenen Namen", metavar="NAME")
     parser.add_argument("--create-item", dest="newItemName", help="Erstellt ein neues Item mit dem angegebenen Namen", metavar="NAME")
     parser.add_argument("--write-process-data", action="store_true", help="Schreibt zufällige Prozessdaten zum angegebenen Item")
+    parser.add_argument("--list-items", action="store_true", help="Listet alle Items im angegebenen Knoten auf")
     parser.add_argument("-v", "--verbose", action="store_true", help="Ausführliche Ausgabe aktivieren")
 
     args = parser.parse_args()
@@ -443,11 +463,11 @@ if __name__ == '__main__':
                                     checkmk_state = 1  # WARNING
                                     checkmk_message = f"Node '{node_name}': Status WARNING - {node_status}"
 
-                                print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
+                                print(f"{checkmk_state} \"rest_api_node_{node_name.replace('"', '\\"')}\""
                                       f" - {checkmk_message.replace('"', '\\"')}"
                                       f" (Last Update: {last_update})")
                     else:
-                        print(f"0 rest_api_nodes - Keine Knoten in Datenbank '{args.dbName}' gefunden.")
+                        print(f"0 \"rest_api_nodes\" - Keine Knoten in Datenbank '{args.dbName}' gefunden.")
                 else:
                     if check_node_exists(args.serverRoot, args.dbName, args.target_node_status, args.apiKey, verify_ssl, verbose, proxies):
                         status = getNodeStatus(args.serverRoot, args.dbName, args.target_node_status, args.apiKey, verify_ssl, verbose, proxies)
@@ -465,7 +485,7 @@ if __name__ == '__main__':
                                 checkmk_state = 1  # WARNING
                                 checkmk_message = f"Node '{args.target_node_status}': Status WARNING - {node_status}"
 
-                            print(f"{checkmk_state} rest_api_node_{args.target_node_status.replace('"', '\\"')}"
+                            print(f"{checkmk_state} \"rest_api_node_{args.target_node_status.replace('"', '\\"')}\""
                                   f" - {checkmk_message.replace('"', '\\"')}"
                                   f" (Last Update: {last_update})")
                         else:
@@ -498,15 +518,15 @@ if __name__ == '__main__':
                                 checkmk_state = 1  # WARNING
                                 checkmk_message = f"Node '{node_name}': Status WARNING - {node_status}"
 
-                            print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
+                            print(f"{checkmk_state} \"rest_api_node_{node_name.replace('"', '\\"')}\""
                                   f" - {checkmk_message.replace('"', '\\"')}"
                                   f" (Last Update: {last_update})")
                 else:
                     print("<<<local>>>")
-                    print(f"0 rest_api_nodes - Keine Knoten in Datenbank '{args.dbName}' gefunden.")
+                    print(f"0 \"rest_api_nodes\" - Keine Knoten in Datenbank '{args.dbName}' gefunden.")
             else:
                 print("<<<local>>>")
-                print(f"0 rest_api_nodes - Datenbank '{args.dbName}' nicht gefunden.")
+                print(f"0 \"rest_api_nodes\" - Datenbank '{args.dbName}' nicht gefunden.")
             sys.exit(0)
 
         # Check if the specified item exists and print details
@@ -554,10 +574,27 @@ if __name__ == '__main__':
                     print(f"Datenbank '{args.dbName}' nicht gefunden. Prozessdaten können nicht gelesen werden.")
             else:
                 print("Bitte geben Sie sowohl --start-time als auch --end-time für das Lesen von Prozessdaten an.")
+                sys.exit(0)
+
+        # List items if --list-items is specified
+        if args.list_items:
+            if check_database_exists(args.serverRoot, args.dbName, args.apiKey, verify_ssl, verbose, proxies):
+                if check_node_exists(args.serverRoot, args.dbName, args.nodeName, args.apiKey, verify_ssl, verbose, proxies):
+                    items = listItem(args.serverRoot, args.dbName, args.nodeName, args.apiKey, verify_ssl, verbose, proxies)
+                    if items is not None:
+                        print(f"Items im Knoten '{args.nodeName}':")
+                        for item in items:
+                            print(f"- {item}")
+                    else:
+                        print(f"Konnte die Item-Liste für Knoten '{args.nodeName}' nicht abrufen.")
+                else:
+                    print(f"Knoten '{args.nodeName}' nicht gefunden.")
+            else:
+                print(f"Datenbank '{args.dbName}' nicht gefunden.")
             sys.exit(0)
 
         # Verify the database exists and print the result (only if no other action was taken)
-        if not any([args.newNodeName, args.newItemName, args.target_node_status, args.list_nodes, args.get_item, args.write_process_data, args.read_process_data]):
+        if not any([args.newNodeName, args.newItemName, args.target_node_status, args.list_nodes, args.get_item, args.write_process_data, args.read_process_data, args.list_items]):
             found_database = check_database_exists(args.serverRoot, args.dbName, args.apiKey, verify_ssl, verbose, proxies)
             if not found_database:
                 print("Keine Datenbank gefunden. Beende.")
