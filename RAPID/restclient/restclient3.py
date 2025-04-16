@@ -329,7 +329,7 @@ def main():
     try:
         # Helper functions using the RestClient
         def check_db_exists(db_name):
-             """Überprüft, ob die angegebene Datenbank existiert."""
+            """Überprüft, ob die angegebene Datenbank existiert."""
             try:
                 response = api_client.get_json("/api/v1/database")
                 return db_name in [url.split('/')[-1] for url in response]
