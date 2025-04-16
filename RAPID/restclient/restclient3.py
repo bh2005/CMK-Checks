@@ -31,58 +31,61 @@ class RestClient2:
                  base_url: str,
                  api_key: str,
                  verify_ssl: bool = True,
-                 timeout: int = 10,
-                 proxies: Optional[Dict[str, str]] = None):
-        self.base_url = base_url
-        self.api_key = api_key
-        self.verify_ssl = verify_ssl
-        self.timeout = timeout
-        self.proxies = proxies
-        self.session = requests.Session()
-        self.headers = {'Content-type': 'application/json', 'Accept': 'text/plain', 'Authorization': f'Bearer {self.api_key}'}
+                 proxies: Optional[Dict[str, str]] = None,  # Hinzugefügt: proxies
+                 username: Optional[str] = None,
+                 password: Optional[str] = None,
+                 timeout: int = 10):
+        self.base_url: str = base_url
+        self.api_key: str = api_key
+        self.verify_ssl: bool = verify_ssl
+        self.proxies: Optional[Dict[str, str]] = proxies  # Speichere proxies als Attribut
+        self.auth: Optional[tuple[str, str]] = (username, password) if username and password else None
+        self.timeout: int = timeout
+        self.session: requests.Session = requests.Session()
+        self.logger: logging.Logger = logging.getLogger(__name__)
+        logging.basicConfig(level=logging.INFO)
+        self.headers: Dict[str, str] = {'Content-type': 'application/json', 'Accept': 'text/plain', 'Authorization': f'Bearer {self.api_key}'}
 
-    def _request(self,
-                 method: str,
-                 endpoint: str,
-                 params: Optional[Dict[str, Any]] = None,
-                 data: Optional[Dict[str, Any]] = None,
-                 json_data: Optional[Dict[str, Any]] = None,
-                 headers: Optional[Dict[str, str]] = None) -> requests.Response:
+    def _request(self, method: str, endpoint: str, headers: Optional[Dict[str, str]] = None, **kwargs: Any) -> requests.Response:
         url = f"{self.base_url}{endpoint}"
         request_headers = self.headers.copy()
         if headers:
             request_headers.update(headers)
-
         try:
             response = self.session.request(
                 method=method,
                 url=url,
-                params=params,
-                data=data,
-                json=json_data,
-                headers=request_headers,
+                auth=self.auth,
                 timeout=self.timeout,
+                headers=request_headers,
                 verify=self.verify_ssl,
-                proxies=self.proxies
+                proxies=self.proxies,  # Verwende das proxies Attribut
+                **kwargs
             )
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            logging.error(f"Request failed for {method} {url}: {e}")
+            self.logger.error(f"Request failed for {method} {url}: {e}")
             raise
 
     def get(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
         return self._request('GET', endpoint, params=params, headers=headers)
 
-    def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json_data: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
-        return self._request('POST', endpoint, data=data, json_data=json_data, headers=headers)
+    def post(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        return self._request('POST', endpoint, data=data, json=json, headers=headers)
+
+    def put(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        return self._request('PUT', endpoint, data=data, json=json, headers=headers)
+
+    def delete(self, endpoint: str, headers: Optional[Dict[str, str]] = None) -> requests.Response:
+        return self._request('DELETE', endpoint, headers=headers)
 
     def get_json(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
         response = self.get(endpoint, params=params, headers=headers)
         return response.json()
 
-    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json_data: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
-        response = self.post(endpoint, data=data, json_data=json_data, headers=headers)
+    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
+        response = self.post(endpoint, data=data, json=json, headers=headers)
         return response.json()
 
 def set_no_proxy():
@@ -138,6 +141,7 @@ def main():
         logging.info("Verwendet keine explizit konfigurierten Proxies (Standard).")
 
     api_client = RestClient2(base_url=args.serverRoot, api_key=args.apiKey, verify_ssl=args.verify_ssl, proxies=proxies)
+    
 
     ts = datetime.datetime.now() - datetime.timedelta(milliseconds=args.eventsToWrite)
     te = datetime.datetime.now()
