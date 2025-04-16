@@ -10,6 +10,7 @@ import random
 from argparse import ArgumentParser
 from enum import Enum
 import datetime
+from jsonschema import validate  # Für die JSON-Schema-Validierung
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,19 +27,26 @@ class NodeStatus_e(str, Enum):
     CONNECTED_PARTIALLY_E = 'CONNECTED_PARTIALLY_E'
     CONNECTED_TO_NOT_ALL_E = 'CONNECTED_TO_NOT_ALL_E'
 
+class UnexpectedStatusError(requests.exceptions.RequestException):
+    """Wird ausgelöst, wenn der Statuscode der Response nicht dem erwarteten Wert entspricht."""
+    def __init__(self, response, expected_status):
+        self.response = response
+        self.expected_status = expected_status
+        super().__init__(f"Unerwarteter Statuscode: {response.status_code} (erwartet: {expected_status}) für URL: {response.url}")
+
 class RestClient2:
     def __init__(self,
                  base_url: str,
                  api_key: str,
                  verify_ssl: bool = True,
-                 proxies: Optional[Dict[str, str]] = None,  # Hinzugefügt: proxies
+                 proxies: Optional[Dict[str, str]] = None,
                  username: Optional[str] = None,
                  password: Optional[str] = None,
                  timeout: int = 10):
         self.base_url: str = base_url
         self.api_key: str = api_key
         self.verify_ssl: bool = verify_ssl
-        self.proxies: Optional[Dict[str, str]] = proxies  # Speichere proxies als Attribut
+        self.proxies: Optional[Dict[str, str]] = proxies
         self.auth: Optional[tuple[str, str]] = (username, password) if username and password else None
         self.timeout: int = timeout
         self.session: requests.Session = requests.Session()
@@ -59,7 +67,7 @@ class RestClient2:
                 timeout=self.timeout,
                 headers=request_headers,
                 verify=self.verify_ssl,
-                proxies=self.proxies,  # Verwende das proxies Attribut
+                proxies=self.proxies,
                 **kwargs
             )
             response.raise_for_status()
@@ -80,13 +88,23 @@ class RestClient2:
     def delete(self, endpoint: str, headers: Optional[Dict[str, str]] = None) -> requests.Response:
         return self._request('DELETE', endpoint, headers=headers)
 
-    def get_json(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
+    def get_json(self, endpoint: str, params: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
         response = self.get(endpoint, params=params, headers=headers)
-        return response.json()
+        if response.status_code != expected_status:
+            raise UnexpectedStatusError(response, expected_status)
+        data = response.json()
+        if schema:
+            validate(data, schema)
+        return data
 
-    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None) -> Any:
+    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
         response = self.post(endpoint, data=data, json=json, headers=headers)
-        return response.json()
+        if response.status_code != expected_status:
+            raise UnexpectedStatusError(response, expected_status)
+        response_data = response.json()
+        if schema:
+            validate(response_data, schema)
+        return response_data
 
 def set_no_proxy():
     """Entfernt Proxy-Einstellungen aus der Umgebung."""
@@ -111,6 +129,7 @@ def main():
     parser.add_argument("--no-proxy", action="store_true", default=True, help="Deaktiviert die Verwendung von Proxies (Standard)")
     parser.add_argument("--proxy", dest="proxy_url", help="Verwendet den angegebenen Proxy (z.B., http://user:pass@host:port)", metavar="URL")
     parser.add_argument("--verify-ssl", action="store_true", default=True, help="Aktiviert die SSL-Zertifikatsprüfung (Standard: True)")
+    parser.add_argument("--timeout", dest="timeout", help="Timeout für API-Anfragen in Sekunden (Standard: 10)", type=int, default=10, metavar="SECONDS")
     parser.add_argument("--list-nodes", action="store_true", help="Listet alle Knoten in der angegebenen Datenbank mit ihrem Status für Checkmk auf")
     parser.add_argument("--get-node-status", dest="target_node_status", help="Ruft den Status eines bestimmten Knotens ab ('all' für alle Knoten)", metavar="NODE_NAME")
     parser.add_argument("--read-process-data", action="store_true", help="Liest Prozessdaten vom angegebenen Item")
@@ -140,8 +159,11 @@ def main():
     else:
         logging.info("Verwendet keine explizit konfigurierten Proxies (Standard).")
 
-    api_client = RestClient2(base_url=args.serverRoot, api_key=args.apiKey, verify_ssl=args.verify_ssl, proxies=proxies)
-    
+    api_client = RestClient2(base_url=args.serverRoot,
+                             api_key=args.apiKey,
+                             verify_ssl=args.verify_ssl,
+                             proxies=proxies,
+                             timeout=args.timeout)
 
     ts = datetime.datetime.now() - datetime.timedelta(milliseconds=args.eventsToWrite)
     te = datetime.datetime.now()
@@ -166,51 +188,57 @@ def main():
             try:
                 response = api_client.get_json("/api/v1/database")
                 return db_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Überprüfen der Datenbankexistenz: {e}")
                 return False
 
         def check_node_exists(db_name, node_name):
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node")
                 return node_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Überprüfen der Knotenexistenz: {e}")
                 return False
 
         def check_item_exists(db_name, node_name, item_name):
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
                 return item_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Überprüfen der Itemexistenz: {e}")
                 return False
 
         def get_node_status(db_name, node_name):
             try:
                 return api_client.get_json(f"/api/v1/nodeconnections/database/{db_name}/node/{node_name}/status")
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Abrufen des Knotenstatus: {e}")
                 return None
 
         def list_nodes(db_name):
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node")
                 return [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Auflisten der Knoten: {e}")
                 return []
 
         def list_items(db_name, node_name):
             try:
                 response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
                 return [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Fehler beim Auflisten der Items: {e}")
                 return []
 
         def create_node(db_name, node_name):
             payload = {"Name": node_name, "Type": 2}
-            api_client.post(f"/api/v1/database/{db_name}/node?format=json", json_data=payload)
+            api_client.post_json(f"/api/v1/database/{db_name}/node?format=json", json=payload, expected_status=201)
             logging.info(f"Node: {node_name} created")
 
         def create_item(db_name, node_name, item_name):
             payload = {"DbName": db_name, "NodeName": node_name, "Name": item_name, "Description": "Test Item"}
-            api_client.post("/api/v1.1/item?format=json", json_data=payload)
+            api_client.post_json("/api/v1.1/item?format=json", json=payload, expected_status=201)
             logging.info(f"Item: {item_name} created")
 
         def get_item_details(db_name, node_name, item_name):
@@ -224,11 +252,12 @@ def main():
                 value = random.uniform(0, 100)
                 events.append({"ts": timestamp, "val": value})
             payload = {"values": events}
-            api_client.post(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData?format=json", json_data=payload)
+            api_client.post_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData?format=json", json=payload, expected_status=204) # Annahme: 204 No Content bei Erfolg
             logging.info(f"{len(events)} Events zu Item '{item_name}' in Knoten '{node_name}' geschrieben.")
 
         def read_process_data(db_name, node_name, item_name, start_time, end_time):
-            params = {"startTime": start_time, "endTime": end_time, "format": "json"}
+            params = {"startTime": start_time, "endTime": end_time, "format":
+"json"}
             return api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData", params=params)
 
         # Main execution logic
@@ -269,13 +298,15 @@ def main():
                             print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
                                   f" - {checkmk_message.replace('"', '\\"')}"
                                   f" (Last Update: {last_update})")
+                        elif verbose:
+                            logging.warning(f"Konnte Status für Knoten '{node_name}' nicht abrufen.")
                 elif check_node_exists(args.dbName, args.target_node_status):
                     status = get_node_status(args.dbName, args.target_node_status)
                     last_update = None
                     if status:
                         node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
                         connection_error = status.get('ConnectionError')
-                        last_update
+                        last_update = status.get('LastUpdate')
                         checkmk_state = 0
                         checkmk_message = f"Node '{args.target_node_status}': Status {node_status_value}"
                         if node_status_value == NodeStatus_e.DISCONNECTED_E.value or node_status_value == NodeStatus_e.ERROR.value or connection_error:
@@ -317,7 +348,7 @@ def main():
                         print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
                               f" - {checkmk_message.replace('"', '\\"')}"
                               f" (Last Update: {last_update})")
-                    else:
+                    elif verbose:
                         logging.warning(f"Konnte Status für Knoten '{node_name}' nicht abrufen.")
             else:
                 print("<<<local>>>")
