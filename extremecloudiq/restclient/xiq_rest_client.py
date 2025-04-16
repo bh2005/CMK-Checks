@@ -8,6 +8,7 @@ import os
 from typing import Optional, List, Dict, Any
 import time
 import datetime
+import redis  # Importiere das Redis-Modul
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
@@ -15,6 +16,9 @@ log = logging.getLogger(__name__)
 XIQ_BASE_URL = "https://api.extremecloudiq.com"
 API_KEY_FILE = "xiq_api_token.txt"
 PAGE_SIZE = 100
+REDIS_HOST = 'localhost'  # Standard-Host für Redis
+REDIS_PORT = 6379        # Standard-Port für Redis
+REDIS_DB = 0             # Standard-Datenbank in Redis
 
 def load_api_token(filename: str = API_KEY_FILE) -> Optional[str]:
     """Lädt den API-Token aus der angegebenen Datei."""
@@ -94,7 +98,8 @@ def process_device(device: Dict[str, Any]) -> Dict[str, Any]:
 
 def get_device_list_paginated(base_url: str, api_token: str) -> Optional[List[Dict[str, Any]]]:
     """
-    Ruft die Liste der Geräte von der ExtremeCloud IQ API paginiert ab und formatiert MAC-Adresse und Uptime.
+    Ruft die Liste der Geräte von der ExtremeCloud IQ API paginiert mit der Ansicht 'FULL' ab
+    und formatiert MAC-Adresse und Uptime.
     """
     page = 1
     all_devices = []
@@ -127,13 +132,26 @@ def get_device_list_paginated(base_url: str, api_token: str) -> Optional[List[Di
             log.error(f"Unexpected error during device list retrieval: {e}")
             return None
 
-    log.info(f"Successfully retrieved and processed {len(all_devices)} devices.")
+    log.info(f"Successfully retrieved and processed {len(all_devices)} devices (using 'FULL' view).")
     return all_devices
+
+def store_devices_in_redis(devices: List[Dict[str, Any]]) -> None:
+    """Speichert die Liste der Geräte in einer Redis-Datenbank und verwendet den Hostnamen als Schlüssel."""
+    try:
+        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+        for device in devices:
+            key = f"xiq:device:{device.get('hostname') or device.get('serial_number') or device.get('mac_address')}"
+            r.set(key, json.dumps(device))
+        log.info(f"Erfolgreich {len(devices)} Geräte in Redis gespeichert (Schlüssel: Hostname > Seriennummer > MAC-Adresse).")
+    except redis.exceptions.ConnectionError as e:
+        log.error(f"Fehler bei der Verbindung zu Redis: {e}")
+    except Exception as e:
+        log.error(f"Unerwarteter Fehler beim Speichern in Redis: {e}")
 
 def main():
     """
-    Hauptfunktion des Skripts zum Einloggen (falls nötig), Abrufen und Ausgeben der XIQ-Geräteliste (paginiert)
-    und Speichern in einer JSON-Datei mit formatierter MAC-Adresse und Uptime.
+    Hauptfunktion des Skripts zum Einloggen (falls nötig), Abrufen der XIQ-Geräteliste (paginiert),
+    Ausgeben auf der Konsole, Speichern in einer JSON-Datei und in Redis.
     """
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
     auth_group = parser.add_mutually_exclusive_group(required=True)
@@ -141,8 +159,9 @@ def main():
     auth_group.add_argument("-u", "--username", dest="username", help="Benutzername für die XIQ API (für erstmaligen Login oder Token-Erneuerung)")
     auth_group.add_argument("-p", "--password", dest="password", help="Passwort für die XIQ API (für erstmaligen Login oder Token-Erneuerung)")
     parser.add_argument("-s", "--server", dest="serverRoot", help="Basis-URL der XIQ API", default=XIQ_BASE_URL)
-    parser.add_argument("--get-devicelist", action="store_true", help="Ruft die Liste der Geräte ab und gibt sie aus (unterstützt Paginierung) und speichert sie in einer Datei (mit formatierter MAC-Adresse und Uptime).")
+    parser.add_argument("--get-devicelist", action="store_true", help="Ruft die Liste der Geräte ab und speichert sie.")
     parser.add_argument("-o", "--output_file", dest="output_file", help="Dateiname für die Ausgabe der Geräteliste (Standard: XiqDeviceList.json)", default="XiqDeviceList.json")
+    parser.add_argument("--store-redis", action="store_true", help="Speichert die Geräteinformationen in Redis.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Ausführliche Ausgabe aktivieren")
 
     args = parser.parse_args()
@@ -177,9 +196,12 @@ def main():
                 try:
                     with open(args.output_file, 'w') as f:
                         json.dump(device_list, f, indent=4)
-                    log.info(f"Geräteliste mit formatierter MAC-Adresse und Uptime erfolgreich in '{args.output_file}' gespeichert.")
+                    log.info(f"Geräteliste erfolgreich in '{args.output_file}' gespeichert.")
                 except IOError as e:
                     log.error(f"Fehler beim Schreiben der Geräteliste in '{args.output_file}': {e}")
+
+                if args.store_redis:
+                    store_devices_in_redis(device_list)
             else:
                 log.error("Fehler beim Abrufen der Geräteliste.")
                 sys.exit(1)
