@@ -17,15 +17,19 @@ log = logging.getLogger(__name__)
 REDIS_HOST = 'localhost'
 REDIS_PORT = 6379
 REDIS_DB = 0
+REDIS_LOCATIONS_DB = 1  # Neue Datenbank für Locations Tree
 XIQ_BASE_URL = "https://api.extremecloudiq.com"
 API_KEY_FILE = "xiq_api_token.txt"
 PAGE_SIZE = 100
+API_SECRET = None  # Globale Variable für den API-Token
 
 def load_api_token(filename: str = API_KEY_FILE) -> Optional[str]:
-    """Lädt den API-Token aus der angegebenen Datei."""
+    """Lädt den API-Token aus der angegebenen Datei und setzt die globale API_SECRET."""
+    global API_SECRET
     try:
         with open(filename, "r") as f:
-            return f.readline().strip()
+            API_SECRET = f.readline().strip()
+            return API_SECRET
     except FileNotFoundError:
         log.warning(f"API-Token-Datei '{filename}' nicht gefunden.")
         return None
@@ -34,7 +38,8 @@ def load_api_token(filename: str = API_KEY_FILE) -> Optional[str]:
         return None
 
 def get_xiq_api_token(base_url: str, username: str, password: str) -> Optional[str]:
-    """Loggt sich bei der ExtremeCloud IQ API ein und ruft den API-Token ab."""
+    """Loggt sich bei der ExtremeCloud IQ API ein und ruft den API-Token ab und setzt die globale API_SECRET."""
+    global API_SECRET
     url = f"{base_url}/login"
     headers = {"Content-Type": "application/json"}
     data = {"username": username, "password": password}
@@ -46,6 +51,7 @@ def get_xiq_api_token(base_url: str, username: str, password: str) -> Optional[s
         api_token = json_response.get("access_token")
         if api_token:
             log.info("API-Token erfolgreich abgerufen.")
+            API_SECRET = api_token
             return api_token
         else:
             log.error("Fehler: API-Token nicht in der Antwort gefunden.")
@@ -66,6 +72,67 @@ def save_api_token(token: str, filename: str = API_KEY_FILE) -> None:
         log.info(f"API-Token erfolgreich in '{filename}' gespeichert.")
     except IOError as e:
         log.error(f"Fehler beim Speichern des API-Tokens in '{filename}': {e}")
+
+def get_device_status_summary(location_id):
+    global API_SECRET  # Access the global API_SECRET variable
+    headers = {
+        "Authorization": f"Bearer {API_SECRET}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = requests.get(f"{XIQ_BASE_URL}/locations/{location_id}/device_status_summary", headers=headers)
+        response.raise_for_status()
+        response_json = response.json()
+        log.info(f"Device status summary for location ID {location_id} retrieved successfully: {response_json}")
+        print(json.dumps(response_json, indent=4))  # Ausgabe als formatiertes JSON
+    except requests.exceptions.RequestException as e:
+        log.error(f"Error retrieving device status summary for location ID {location_id}: {e}")
+        print(f"Error retrieving device status summary for location ID {location_id}: {e}")
+        # Check if the error is due to an expired token, and inform the user.
+        if response.status_code == 401:  # Assuming 401 is unauthorized
+            log.warning("Token expired. Bitte loggen Sie sich erneut ein, um ein neues Token zu erhalten.")
+            print("Token expired. Bitte loggen Sie sich erneut ein, um ein neues Token zu erhalten.")
+        else:
+            log.error(f"Error retrieving device status summary. Error Code: {response.status_code}")
+            print(f"Error retrieving device status summary. Error Code: {response.status_code}")
+
+def get_locations_tree():
+    global API_SECRET
+    headers = {
+        "Authorization": f"Bearer {API_SECRET}",
+        "Content-Type": "application/json",
+    }
+    url = f"{XIQ_BASE_URL}/locations/tree"
+    try:
+        log.info(f"Rufe Location Tree ab: {url}")
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        locations_tree = response.json()
+        print(json.dumps(locations_tree, indent=4))  # Ausgabe auf stdout
+
+        # Speichern in Redis (db=1)
+        try:
+            r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_LOCATIONS_DB, decode_responses=True)
+            r.set("xiq:locations:tree", json.dumps(locations_tree))
+            log.info("Location Tree erfolgreich in Redis (db=1) gespeichert.")
+        except redis.exceptions.ConnectionError as e:
+            log.error(f"Fehler bei der Verbindung zu Redis (db=1): {e}")
+        except Exception as e:
+            log.error(f"Unerwarteter Fehler beim Speichern des Location Tree in Redis: {e}")
+
+    except requests.exceptions.RequestException as e:
+        log.error(f"Fehler beim Abrufen des Location Tree: {e}")
+        print(f"Fehler beim Abrufen des Location Tree: {e}")
+        if response.status_code == 401:
+            log.warning("Token abgelaufen. Bitte loggen Sie sich erneut ein, um ein neues Token zu erhalten.")
+            print("Token abgelaufen. Bitte loggen Sie sich erneut ein, um ein neues Token zu erhalten.")
+        else:
+            log.error(f"Fehler beim Abrufen des Location Tree. Fehlercode: {response.status_code}")
+            print(f"Fehler beim Abrufen des Location Tree. Fehlercode: {response.status_code}")
+    except json.JSONDecodeError as e:
+        log.error(f"Fehler beim Decodieren der JSON-Antwort für den Location Tree: {e}")
+        print(f"Fehler beim Decodieren der JSON-Antwort für den Location Tree: {e}")
 
 def format_mac_address(mac: Optional[str]) -> Optional[str]:
     """Formatiert eine 12-stellige MAC-Adresse mit Doppelpunkten."""
@@ -329,7 +396,7 @@ def convert_list_to_csv(devices: List[Dict[str, Any]], csv_file: str) -> None:
                     "building_id": locations[2].get("id") if locations and len(locations) > 2 else "",
                     "building_name": locations[2].get("name") if locations and len(locations) > 2 else "",
                     "floor_id": locations[3].get("id") if locations and len(locations) > 3 else "",
-                    "floor_name": locations[3].get("name") if locations and len(locations) >
+                    "floor_name": locations[3].get("name") if locations and len(locations) > 3 else "",
                     "country_code": device.get("country_code"),
                     "description": device.get("description"),
                     "remote_port_id": lldp_cdp_infos[0].get("port_id") if lldp_cdp_infos and len(lldp_cdp_infos) > 0 else "",
@@ -352,6 +419,7 @@ def main():
     """
     Hauptfunktion des Skripts zum Einloggen (falls nötig), Abrufen der XIQ-Geräteliste (paginiert)
     oder der Details für ein einzelnes Gerät (per ID oder Hostname), oder Suchen von Hosts in Redis,
+    oder Abrufen der Gerätestatusübersicht pro Standort, oder Abrufen des Location Tree,
     Ausgabe auf der Konsole (optional reduziert), Speichern in einer JSON-Datei, in Redis und als CSV.
     """
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
@@ -367,8 +435,10 @@ def main():
     parser.add_argument("-m", "--managed_by", dest="managed_by_value", help="Optional: Filter für 'managed_by' bei der Redis-Suche.")
     parser.add_argument("-l", "--location_part", dest="location_name_part", help="Optional: Teil des Location-Namens für die Redis-Suche.")
     parser.add_argument("--hostname-filter", dest="hostname_value", help="Optional: Hostname für die Redis-Suche.")
+    parser.add_argument("--get-device-status", dest="location_id", help="Ruft die Gerätestatusübersicht für die angegebene Location-ID ab.")
+    parser.add_argument("--get-locations-tree", action="store_true", help="Ruft den Location Tree ab und speichert ihn in Redis (db=1).")
     parser.add_argument("-o", "--output_file", dest="output_file", help="Dateiname für die Ausgabe der Geräteliste (JSON, Standard: XiqDeviceList.json)", default="XiqDeviceList.json")
-    parser.add_argument("--store-redis", action="store_true", help="Speichert die Geräteinformationen in Redis.")
+    parser.add_argument("--store-redis", action="store_true", help="Speichert die Geräteinformationen in Redis (db=0).")
     parser.add_argument("--show-pretty", action="store_true", help="Zeigt eine vereinfachte Ausgabe der Geräte (id, hostname, mac, ip) auf der Konsole.")
     parser.add_argument("--output-csv", dest="output_csv_file", help="Dateiname für die Ausgabe der Geräteliste als CSV.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Ausführliche Ausgabe aktivieren")
@@ -462,6 +532,22 @@ def main():
                 print("-" * 20)
         else:
             print("Keine Hosts gefunden, die den Suchkriterien entsprechen.")
+
+    elif args.location_id:
+        if API_SECRET:
+            get_device_status_summary(args.location_id)
+        else:
+            log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            print("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            sys.exit(1)
+
+    elif args.get_locations_tree:
+        if API_SECRET:
+            get_locations_tree()
+        else:
+            log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            print("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
