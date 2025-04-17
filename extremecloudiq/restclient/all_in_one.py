@@ -5,7 +5,7 @@ import logging
 from argparse import ArgumentParser
 import json
 import os
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 import time
 import datetime
 import redis  # Importiere das Redis-Modul
@@ -133,6 +133,58 @@ def get_locations_tree():
     except json.JSONDecodeError as e:
         log.error(f"Fehler beim Decodieren der JSON-Antwort für den Location Tree: {e}")
         print(f"Fehler beim Decodieren der JSON-Antwort für den Location Tree: {e}")
+
+def find_location_info(location_tree: list, search_term: str) -> Optional[Tuple[str, int]]:
+    """
+    Durchsucht den Location Tree rekursiv nach einem Suchbegriff im Namen oder unique_name.
+
+    Args:
+        location_tree: Die geparste Liste der Location-Objekte.
+        search_term: Der Begriff, nach dem gesucht werden soll.
+
+    Returns:
+        Ein Tuple mit (unique_name, id) des gefundenen Eintrags oder None, wenn nichts gefunden wird.
+    """
+    for location in location_tree:
+        if search_term.lower() in location.get("name", "").lower() or search_term.lower() in location.get("unique_name", "").lower():
+            return location.get("unique_name"), location.get("id")
+        if "children" in location and isinstance(location["children"], list):
+            result = find_location_info(location["children"], search_term)
+            if result:
+                return result
+    return None
+
+def get_location_info_by_name(search_term: str) -> Optional[Dict[str, Any]]:
+    """
+    Ruft den Location Tree aus Redis ab und sucht nach dem angegebenen Suchbegriff.
+
+    Args:
+        search_term: Der Begriff, nach dem gesucht werden soll.
+
+    Returns:
+        Ein Dictionary mit {"unique_name": ..., "id": ...} des gefundenen Eintrags oder None.
+    """
+    try:
+        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_LOCATIONS_DB, decode_responses=True)
+        locations_tree_json = r.get("xiq:locations:tree")
+        if locations_tree_json:
+            locations_tree = json.loads(locations_tree_json)
+            result = find_location_info(locations_tree, search_term)
+            if result:
+                unique_name, location_id = result
+                return {"unique_name": unique_name, "id": location_id}
+            else:
+                print(f"Keine Location mit dem Begriff '{search_term}' gefunden.")
+                return None
+        else:
+            print("Location Tree nicht in Redis gefunden.")
+            return None
+    except redis.exceptions.ConnectionError as e:
+        print(f"Fehler bei der Verbindung zu Redis (db={REDIS_LOCATIONS_DB}): {e}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Fehler beim Decodieren des Location Tree aus Redis: {e}")
+        return None
 
 def format_mac_address(mac: Optional[str]) -> Optional[str]:
     """Formatiert eine 12-stellige MAC-Adresse mit Doppelpunkten."""
@@ -291,7 +343,7 @@ def find_hosts(managed_by_value=None, location_name_part=None, hostname_value=No
                         found_in_location = False
                         locations = device_data.get("locations", [])
                         if isinstance(locations, list):
-                            for location in locations:
+for location in locations:
                                 if isinstance(location, dict) and location.get("name") and location_name_part in location.get("name"):
                                     found_in_location = True
                                     break
@@ -420,6 +472,7 @@ def main():
     Hauptfunktion des Skripts zum Einloggen (falls nötig), Abrufen der XIQ-Geräteliste (paginiert)
     oder der Details für ein einzelnes Gerät (per ID oder Hostname), oder Suchen von Hosts in Redis,
     oder Abrufen der Gerätestatusübersicht pro Standort, oder Abrufen des Location Tree,
+    oder Suchen nach Informationen im Location Tree,
     Ausgabe auf der Konsole (optional reduziert), Speichern in einer JSON-Datei, in Redis und als CSV.
     """
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
@@ -437,6 +490,7 @@ def main():
     parser.add_argument("--hostname-filter", dest="hostname_value", help="Optional: Hostname für die Redis-Suche.")
     parser.add_argument("--get-device-status", dest="location_id", help="Ruft die Gerätestatusübersicht für die angegebene Location-ID ab.")
     parser.add_argument("--get-locations-tree", action="store_true", help="Ruft den Location Tree ab und speichert ihn in Redis (db=1).")
+    parser.add_argument("--find-location", dest="search_location", help="Sucht nach einer Location im Location Tree (Redis db=1) und gibt unique_name und id aus.")
     parser.add_argument("-o", "--output_file", dest="output_file", help="Dateiname für die Ausgabe der Geräteliste (JSON, Standard: XiqDeviceList.json)", default="XiqDeviceList.json")
     parser.add_argument("--store-redis", action="store_true", help="Speichert die Geräteinformationen in Redis (db=0).")
     parser.add_argument("--show-pretty", action="store_true", help="Zeigt eine vereinfachte Ausgabe der Geräte (id, hostname, mac, ip) auf der Konsole.")
@@ -544,10 +598,17 @@ def main():
     elif args.get_locations_tree:
         if API_SECRET:
             get_locations_tree()
-        else:
+else:
             log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
             print("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
             sys.exit(1)
+
+    elif args.search_location:
+        location_info = get_location_info_by_name(args.search_location)
+        if location_info:
+            print("Gefundene Location:")
+            print(f"  unique_name: {location_info['unique_name']}")
+            print(f"  id: {location_info['id']}")
 
 if __name__ == "__main__":
     main()
