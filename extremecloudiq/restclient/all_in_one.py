@@ -343,7 +343,7 @@ def find_hosts(managed_by_value=None, location_name_part=None, hostname_value=No
                         found_in_location = False
                         locations = device_data.get("locations", [])
                         if isinstance(locations, list):
-for location in locations:
+                            for location in locations:
                                 if isinstance(location, dict) and location.get("name") and location_name_part in location.get("name"):
                                     found_in_location = True
                                     break
@@ -598,7 +598,7 @@ def main():
     elif args.get_locations_tree:
         if API_SECRET:
             get_locations_tree()
-else:
+        else:
             log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
             print("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
             sys.exit(1)
