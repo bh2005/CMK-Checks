@@ -228,24 +228,6 @@ class RestClient2:
             validate(response_data, schema)
         return response_data
 
-    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
-        response = self.post(endpoint, data=data, json=json, headers=headers)
-        if response.status_code != expected_status:
-            raise UnexpectedStatusError(response, expected_status)
-        response_data = response.json()
-        if schema:
-            validate(response_data, schema)
-        return response_data
-
-    def post_json(self, endpoint: str, data: Optional[Dict[str, Any]] = None, json: Optional[Dict[str, Any]] = None, headers: Optional[Dict[str, str]] = None, expected_status: int = 200, schema: Optional[Dict[str, Any]] = None) -> Any:
-        response = self.post(endpoint, data=data, json=json, headers=headers)
-        if response.status_code != expected_status:
-            raise UnexpectedStatusError(response, expected_status)
-        response_data = response.json()
-        if schema:
-            validate(response_data, schema)
-        return response_data
-
 def set_no_proxy():
     """Entfernt Proxy-Einstellungen aus der Umgebung."""
     if 'HTTP_PROXY' in os.environ:
@@ -257,6 +239,84 @@ def set_no_proxy():
     if 'https_proxy' in os.environ:
         del os.environ['https_proxy']
     logging.info("Proxy-Einstellungen entfernt.")
+
+def check_db_exists(db_name, api_client):
+    """Überprüft, ob die angegebene Datenbank existiert."""
+    try:
+        response = api_client.get_json("/api/v1/database")
+        return db_name in [url.split('/')[-1] for url in response]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Überprüfen der Datenbankexistenz: {e}")
+        return False
+
+def check_node_exists(db_name, node_name, api_client):
+    """Überprüft, ob der angegebene Knoten in der Datenbank existiert."""
+    try:
+        response = api_client.get_json(f"/api/v1/database/{db_name}/node")
+        return node_name in [url.split('/')[-1] for url in response]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Überprüfen der Knotenexistenz: {e}")
+        return False
+
+def check_item_exists(db_name, node_name, item_name, api_client):
+    """Überprüft, ob das angegebene Item im Knoten existiert."""
+    try:
+        response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
+        return item_name in [url.split('/')[-1] for url in response]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Überprüfen der Itemexistenz: {e}")
+        return False
+
+def get_node_status(db_name, node_name, api_client):
+    try:
+        return api_client.get_json(f"/api/v1/nodeconnections/database/{db_name}/node/{node_name}/status")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Abrufen des Knotenstatus: {e}")
+        return None
+
+def list_nodes(db_name, api_client):
+    try:
+        response = api_client.get_json(f"/api/v1/database/{db_name}/node")
+        return [url.split('/')[-1] for url in response]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Auflisten der Knoten: {e}")
+        return []
+
+def list_items(db_name, node_name, api_client):
+    try:
+        response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
+        return [url.split('/')[-1] for url in response]
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Fehler beim Auflisten der Items: {e}")
+        return []
+
+def create_node(db_name, node_name, api_client):
+    payload = {"Name": node_name, "Type": 2}
+    api_client.post_json(f"/api/v1/database/{db_name}/node?format=json", json=payload, expected_status=201)
+    logging.info(f"Node: {node_name} created")
+
+def create_item(db_name, node_name, item_name, api_client):
+    payload = {"DbName": db_name, "NodeName": node_name, "Name": item_name, "Description": "Test Item"}
+    api_client.post_json("/api/v1.1/item?format=json", json=payload, expected_status=201)
+    logging.info(f"Item: {item_name} created")
+
+def get_item_details(db_name, node_name, item_id, api_client):
+    return api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_id}?format=json")
+
+def write_process_data(db_name, node_name, item_name, start_time, events_to_write, api_client):
+    start_time_dt = datetime.datetime.fromisoformat(start_time)
+    events = []
+    for i in range(events_to_write):
+        timestamp = (start_time_dt + datetime.timedelta(milliseconds=i)).isoformat()
+        value = random.uniform(0, 100)
+        events.append({"ts": timestamp, "val": value})
+    payload = {"values": events}
+    api_client.post_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData?format=json", json=payload, expected_status=204) # Annahme: 204 No Content bei Erfolg
+    logging.info(f"{len(events)} Events zu Item '{item_name}' in Knoten '{node_name}' geschrieben.")
+
+def read_process_data(db_name, node_name, item_name, start_time, end_time, api_client):
+    params = {"startTime": start_time, "endTime": end_time, "format": "json"}
+    return api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData", params=params)
 
 def main():
     """
@@ -279,7 +339,7 @@ def main():
     parser.add_argument("--read-process-data", action="store_true", help="Liest Prozessdaten vom angegebenen Item")
     parser.add_argument("--start-time", dest="startTime", help="Startzeit für das Lesen von Prozessdaten (ISO-Format) (z.B., 2023-10-26T10:00:00)", metavar="TIMESTAMP")
     parser.add_argument("--end-time", dest="endTime", help="Endzeit für das Lesen von Prozessdaten (ISO-Format) (z.B., 2023-10-26T11:00:00)", metavar="TIMESTAMP")
-    parser.add_argument("--get-item", action="store_true", help="Überprüft, ob das angegebene Item existiert und gibt Details aus")
+    parser.add_argument("--get-item", dest="itemId", type=int, help="ID des abzufragenden Items", metavar="ID")
     parser.add_argument("--create-node", dest="newNodeName", help="Erstellt einen neuen Knoten mit dem angegebenen Namen", metavar="NAME")
     parser.add_argument("--create-item", dest="newItemName", help="Erstellt ein neues Item mit dem angegebenen Namen", metavar="NAME")
     parser.add_argument("--write-process-data", action="store_true", help="Schreibt zufällige Prozessdaten zum angegebenen Item")
@@ -326,159 +386,33 @@ def main():
             logging.error("Ungültiges Endzeit-Format. Bitte ISO-Format verwenden (z.B., 2023-10-26T11:00:00).")
             sys.exit(1)
 
-    try:
-        # Helper functions using the RestClient
-        def check_db_exists(db_name):
-            """Überprüft, ob die angegebene Datenbank existiert."""
-            try:
-                response = api_client.get_json("/api/v1/database")
-                return db_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Überprüfen der Datenbankexistenz: {e}")
-                return False
+    if args.itemId is not None:
+        item_data = get_item_details(args.dbName, args.nodeName, args.itemId, api_client)
+        print(f"Item mit ID {args.itemId} gefunden:")
+        print(json.dumps(item_data, indent=4))
+        sys.exit(0)
 
-        def check_node_exists(db_name, node_name):
-            """Überprüft, ob der angegebene Knoten in der Datenbank existiert."""
-            try:
-                response = api_client.get_json(f"/api/v1/database/{db_name}/node")
-                return node_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Überprüfen der Knotenexistenz: {e}")
-                return False
+    if args.newNodeName:
+        if check_db_exists(args.dbName, api_client):
+            create_node(args.dbName, args.newNodeName, api_client)
+        else:
+            logging.error(f"Datenbank '{args.dbName}' nicht gefunden. Knoten '{args.newNodeName}' kann nicht erstellt werden.")
+        sys.exit(0)
 
-        def check_item_exists(db_name, node_name, item_name):
-            """Überprüft, ob das angegebene Item im Knoten existiert."""
-            try:
-                response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
-                return item_name in [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Überprüfen der Itemexistenz: {e}")
-                return False
+    if args.newItemName:
+        if check_db_exists(args.dbName, api_client) and check_node_exists(args.dbName, args.nodeName, api_client):
+            create_item(args.dbName, args.nodeName, args.newItemName, api_client)
+        else:
+            logging.error(f"Datenbank '{args.dbName}' oder Knoten '{args.nodeName}' nicht gefunden. Item '{args.newItemName}' kann nicht erstellt werden.")
+        sys.exit(0)
 
-        def get_node_status(db_name, node_name):
-            try:
-                return api_client.get_json(f"/api/v1/nodeconnections/database/{db_name}/node/{node_name}/status")
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Abrufen des Knotenstatus: {e}")
-                return None
-
-        def list_nodes(db_name):
-            try:
-                response = api_client.get_json(f"/api/v1/database/{db_name}/node")
-                return [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Auflisten der Knoten: {e}")
-                return []
-
-        def list_items(db_name, node_name):
-            try:
-                response = api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item")
-                return [url.split('/')[-1] for url in response]
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Fehler beim Auflisten der Items: {e}")
-                return []
-
-        def create_node(db_name, node_name):
-            payload = {"Name": node_name, "Type": 2}
-            api_client.post_json(f"/api/v1/database/{db_name}/node?format=json", json=payload, expected_status=201)
-            logging.info(f"Node: {node_name} created")
-
-        def create_item(db_name, node_name, item_name):
-            payload = {"DbName": db_name, "NodeName": node_name, "Name": item_name, "Description": "Test Item"}
-            api_client.post_json("/api/v1.1/item?format=json", json=payload, expected_status=201)
-            logging.info(f"Item: {item_name} created")
-
-        def get_item_details(db_name, node_name, item_name):
-            return api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}?format=json")
-
-        def write_process_data(db_name, node_name, item_name, start_time, events_to_write):
-            start_time_dt = datetime.datetime.fromisoformat(start_time)
-            events = []
-            for i in range(events_to_write):
-                timestamp = (start_time_dt + datetime.timedelta(milliseconds=i)).isoformat()
-                value = random.uniform(0, 100)
-                events.append({"ts": timestamp, "val": value})
-            payload = {"values": events}
-            api_client.post_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData?format=json", json=payload, expected_status=204) # Annahme: 204 No Content bei Erfolg
-            logging.info(f"{len(events)} Events zu Item '{item_name}' in Knoten '{node_name}' geschrieben.")
-
-        def read_process_data(db_name, node_name, item_name, start_time, end_time):
-            params = {"startTime": start_time, "endTime": end_time, "format":
-"json"}
-            return api_client.get_json(f"/api/v1/database/{db_name}/node/{node_name}/item/{item_name}/processData", params=params)
-
-        # Main execution logic
-        if args.newNodeName:
-            if check_db_exists(args.dbName):
-                create_node(args.dbName, args.newNodeName)
-            else:
-                logging.error(f"Datenbank '{args.dbName}' nicht gefunden. Knoten '{args.newNodeName}' kann nicht erstellt werden.")
-            sys.exit(0)
-
-        if args.newItemName:
-            if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName):
-                create_item(args.dbName, args.nodeName, args.newItemName)
-            else:
-                logging.error(f"Datenbank '{args.dbName}' oder Knoten '{args.nodeName}' nicht gefunden. Item '{args.newItemName}' kann nicht erstellt werden.")
-            sys.exit(0)
-
-        if args.target_node_status:
-            if check_db_exists(args.dbName):
-                print("<<<local>>>")
-                if args.target_node_status.lower() == 'all':
-                    nodes = list_nodes(args.dbName)
-                    for node_name in nodes:
-                        status = get_node_status(args.dbName, node_name)
-                        last_update = None
-                        if status:
-                            node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
-                            connection_error = status.get('ConnectionError')
-                            last_update = status.get('LastUpdate')
-                            checkmk_state = 0
-                            checkmk_message = f"Node '{node_name}': Status {node_status_value}"
-                            if node_status_value == NodeStatus_e.DISCONNECTED_E.value or node_status_value == NodeStatus_e.ERROR.value or connection_error:
-                                checkmk_state = 2
-                                checkmk_message = f"Node '{node_name}': Status CRITICAL - {node_status_value if node_status_value else 'Connection Error'}"
-                            elif node_status_value != NodeStatus_e.CONNECTED_E.value:
-                                checkmk_state = 1
-                                checkmk_message = f"Node '{node_name}': Status WARNING - {node_status_value}"
-                            print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
-                                  f" - {checkmk_message.replace('"', '\\"')}"
-                                  f" (Last Update: {last_update})")
-                        elif verbose:
-                            logging.warning(f"Konnte Status für Knoten '{node_name}' nicht abrufen.")
-                elif check_node_exists(args.dbName, args.target_node_status):
-                    status = get_node_status(args.dbName, args.target_node_status)
-                    last_update = None
-                    if status:
-                        node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
-                        connection_error = status.get('ConnectionError')
-                        last_update = status.get('LastUpdate')
-                        checkmk_state = 0
-                        checkmk_message = f"Node '{args.target_node_status}': Status {node_status_value}"
-                        if node_status_value == NodeStatus_e.DISCONNECTED_E.value or node_status_value == NodeStatus_e.ERROR.value or connection_error:
-                            checkmk_state = 2
-                            checkmk_message = f"Node '{args.target_node_status}': Status CRITICAL - {node_status_value if node_status_value else 'Connection Error'}"
-                        elif node_status_value != NodeStatus_e.CONNECTED_E.value:
-                            checkmk_state = 1
-                            checkmk_message = f"Node '{args.target_node_status}': Status WARNING - {node_status_value}"
-                        print(f"{checkmk_state} rest_api_node_{args.target_node_status.replace('"', '\\"')}"
-                              f" - {checkmk_message.replace('"', '\\"')}"
-                              f" (Last Update: {last_update})")
-                    else:
-                        logging.error(f"Konnte Status für Knoten '{args.target_node_status}' nicht abrufen.")
-                else:
-                    logging.error(f"Knoten '{args.target_node_status}' nicht gefunden.")
-            else:
-                logging.error(f"Datenbank '{args.dbName}' nicht gefunden.")
-            sys.exit(0)
-
-        if args.list_nodes:
-            if check_db_exists(args.dbName):
-                nodes = list_nodes(args.dbName)
-                print("<<<local>>>")
+    if args.target_node_status:
+        if check_db_exists(args.dbName, api_client):
+            print("<<<local>>>")
+            if args.target_node_status.lower() == 'all':
+                nodes = list_nodes(args.dbName, api_client)
                 for node_name in nodes:
-                    status = get_node_status(args.dbName, node_name)
+                    status = get_node_status(args.dbName, node_name, api_client)
                     last_update = None
                     if status:
                         node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
@@ -497,69 +431,102 @@ def main():
                               f" (Last Update: {last_update})")
                     elif verbose:
                         logging.warning(f"Konnte Status für Knoten '{node_name}' nicht abrufen.")
-            else:
-                print("<<<local>>>")
-                print(f"0 rest_api_nodes - Datenbank '{args.dbName}' nicht gefunden.")
-            sys.exit(0)
-
-        if args.get_item:
-            if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName) and check_item_exists(args.dbName, args.nodeName, args.itemName):
-                item_data = get_item_details(args.dbName, args.nodeName, args.itemName)
-                print(f"Item '{args.itemName}' gefunden in Knoten '{args.nodeName}':")
-                print(json.dumps(item_data, indent=4))
-            else:
-                logging.error(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' oder Item '{args.itemName}' nicht gefunden.")
-            sys.exit(0)
-
-        if args.write_process_data:
-            if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName) and check_item_exists(args.dbName, args.nodeName, args.itemName):
-                write_process_data(args.dbName, args.nodeName, args.itemName, ts.isoformat(), args.eventsToWrite)
-            else:
-                logging.error(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' oder Item '{args.itemName}' nicht gefunden. Prozessdaten können nicht geschrieben werden.")
-            sys.exit(0)
-
-        if args.read_process_data:
-            if args.startTime and args.endTime:
-                if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName) and check_item_exists(args.dbName, args.nodeName, args.itemName):
-                    data = read_process_data(args.dbName, args.nodeName, args.itemName, args.startTime, args.endTime)
-                    if data:
-                        print(f"Prozessdaten von Item '{args.itemName}' in Knoten '{args.nodeName}':")
-                        print(json.dumps(data, indent=4))
-                    else:
-                        logging.warning(f"Konnte keine Prozessdaten für Item '{args.itemName}' abrufen.")
+            elif check_node_exists(args.dbName, args.target_node_status, api_client):
+                status = get_node_status(args.dbName, args.target_node_status, api_client)
+                last_update = None
+                if status:
+                    node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
+                    connection_error = status.get('ConnectionError')
+                    last_update = status.get('LastUpdate')
+                    checkmk_state = 0
+                    checkmk_message = f"Node '{args.target_node_status}': Status {node_status_value}"
+                    if node_status_value == NodeStatus_e.DISCONNECTED_E.value or node_status_value == NodeStatus_e.ERROR.value or connection_error:
+                        checkmk_state = 2
+                        checkmk_message = f"Node '{args.target_node_status}': Status CRITICAL - {node_status_value if node_status_value else 'Connection Error'}"
+                    elif node_status_value != NodeStatus_e.CONNECTED_E.value:
+                        checkmk_state = 1
+                        checkmk_message = f"Node '{args.target_node_status}': Status WARNING - {node_status_value}"
+                    print(f"{checkmk_state} rest_api_node_{args.target_node_status.replace('"', '\\"')}"
+                          f" - {checkmk_message.replace('"', '\\"')}"
+                          f" (Last Update: {last_update})")
                 else:
-                    logging.error(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' oder Item '{args.itemName}' nicht gefunden. Prozessdaten können nicht gelesen werden.")
+                    logging.error(f"Konnte Status für Knoten '{args.target_node_status}' nicht abrufen.")
             else:
-                logging.error("Bitte geben Sie sowohl --start-time als auch --end-time für das Lesen von Prozessdaten an.")
-            sys.exit(0)
+                logging.error(f"Knoten '{args.target_node_status}' nicht gefunden.")
+        else:
+            logging.error(f"Datenbank '{args.dbName}' nicht gefunden.")
+        sys.exit(0)
 
-        if args.list_items:
-            if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName):
-                items = list_items(args.dbName, args.nodeName)
-                if items is not None:
-                    print(f"Items im Knoten '{args.nodeName}':")
-                    for item in items:
-                        print(f"- {item}")
+    if args.list_nodes:
+        if check_db_exists(args.dbName, api_client):
+            nodes = list_nodes(args.dbName, api_client)
+            print("<<<local>>>")
+            for node_name in nodes:
+                status = get_node_status(args.dbName, node_name, api_client)
+                last_update = None
+                if status:
+                    node_status_value = status.get('ConnectionStatus', {}).get('ConnectionStatus')
+                    connection_error = status.get('ConnectionError')
+                    last_update = status.get('LastUpdate')
+                    checkmk_state = 0
+                    checkmk_message = f"Node '{node_name}': Status {node_status_value}"
+                    if node_status_value == NodeStatus_e.DISCONNECTED_E.value or node_status_value == NodeStatus_e.ERROR.value or connection_error:
+                        checkmk_state = 2
+                        checkmk_message = f"Node '{node_name}': Status CRITICAL - {node_status_value if node_status_value else 'Connection Error'}"
+                    elif node_status_value != NodeStatus_e.CONNECTED_E.value:
+                        checkmk_state = 1
+                        checkmk_message = f"Node '{node_name}': Status WARNING - {node_status_value}"
+                    print(f"{checkmk_state} rest_api_node_{node_name.replace('"', '\\"')}"
+                          f" - {checkmk_message.replace('"', '\\"')}"
+                          f" (Last Update: {last_update})")
+                elif verbose:
+                    logging.warning(f"Konnte Status für Knoten '{node_name}' nicht abrufen.")
+        else:
+            print("<<<local>>>")
+            print(f"0 rest_api_nodes - Datenbank '{args.dbName}' nicht gefunden.")
+        sys.exit(0)
+
+    if args.write_process_data:
+        if check_db_exists(args.dbName, api_client) and check_node_exists(args.dbName, args.nodeName, api_client) and check_item_exists(args.dbName, args.nodeName, args.itemName, api_client):
+            write_process_data(args.dbName, args.nodeName, args.itemName, ts.isoformat(), args.eventsToWrite, api_client)
+        else:
+            logging.error(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' oder Item '{args.itemName}' nicht gefunden. Prozessdaten können nicht geschrieben werden.")
+        sys.exit(0)
+
+    if args.read_process_data:
+        if args.startTime and args.endTime:
+            if check_db_exists(args.dbName, api_client) and check_node_exists(args.dbName, args.nodeName, api_client) and check_item_exists(args.dbName, args.nodeName, args.itemName, api_client):
+                data = read_process_data(args.dbName, args.nodeName, args.itemName, args.startTime, args.endTime, api_client)
+                if data:
+                    print(f"Prozessdaten von Item '{args.itemName}' in Knoten '{args.nodeName}':")
+                    print(json.dumps(data, indent=4))
                 else:
-                    logging.warning(f"Konnte die Item-Liste für Knoten '{args.nodeName}' nicht abrufen.")
+                    logging.warning(f"Konnte keine Prozessdaten für Item '{args.itemName}' abrufen.")
             else:
-                logging.error(f"Datenbank '{args.dbName}' oder Knoten '{args.nodeName}' nicht gefunden.")
-            sys.exit(0)
+                logging.error(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' oder Item '{args.itemName}' nicht gefunden. Prozessdaten können nicht gelesen werden.")
+        else:
+            logging.error("Bitte geben Sie sowohl --start-time als auch --end-time für das Lesen von Prozessdaten an.")
+        sys.exit(0)
 
-        # Default action if no specific option is used
-        if not any([args.newNodeName, args.newItemName, args.target_node_status, args.list_nodes, args.get_item, args.write_process_data, args.read_process_data, args.list_items]):
-            if check_db_exists(args.dbName) and check_node_exists(args.dbName, args.nodeName) and check_item_exists(args.dbName, args.nodeName, args.itemName):
-                logging.info(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' und Item '{args.itemName}' gefunden.")
+    if args.list_items:
+        if check_db_exists(args.dbName, api_client) and check_node_exists(args.dbName, args.nodeName, api_client):
+            items = list_items(args.dbName, args.nodeName, api_client)
+            if items is not None:
+                print(f"Items im Knoten '{args.nodeName}':")
+                for item in items:
+                    print(f"- {item}")
             else:
-                logging.warning("Mindestens eine der Standardentitäten (Datenbank, Knoten, Item) wurde nicht gefunden.")
-                sys.exit(1)
+                logging.warning(f"Konnte die Item-Liste für Knoten '{args.nodeName}' nicht abrufen.")
+        else:
+            logging.error(f"Datenbank '{args.dbName}' oder Knoten '{args.nodeName}' nicht gefunden.")
+        sys.exit(0)
 
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Ein Fehler bei der API-Interaktion ist aufgetreten: {e}")
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"Ein unerwarteter Fehler ist aufgetreten: {e}")
-        sys.exit(-1)
+    # Default action if no specific option is used
+    if not any([args.newNodeName, args.newItemName, args.target_node_status, args.list_nodes, args.itemId is not None, args.write_process_data, args.read_process_data, args.list_items]):
+        if check_db_exists(args.dbName, api_client) and check_node_exists(args.dbName, args.nodeName, args.nodeName, api_client) and check_item_exists(args.dbName, args.nodeName, args.itemName, api_client):
+            logging.info(f"Datenbank '{args.dbName}', Knoten '{args.nodeName}' und Item '{args.itemName}' existieren.")
+        else:
+            logging.warning(f"Mindestens eine der folgenden Komponenten nicht gefunden: Datenbank '{args.dbName}', Knoten '{args.nodeName}', Item '{args.itemName}'.")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
