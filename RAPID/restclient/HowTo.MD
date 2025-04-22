@@ -1,113 +1,132 @@
-# How to Use the REST API Client for Checkmk
+Okay, hier ist die aktualisierte `HowTo.md`-Datei, in der `ganzneu6.py` durch `restclient.py` ersetzt wurde:
 
-Dieses Dokument beschreibt die Verwendung des Python-Skripts `restclient3.py` zur Interaktion mit einer REST-API, typischerweise im Kontext von Checkmk-Checks.
+```markdown
+# How-To: Interaktion mit der REST API mittels `restclient.py`
+
+Dieses Dokument beschreibt, wie Sie das Python-Skript `restclient.py` verwenden können, um mit einer REST API zu interagieren und Datenbanken, Knoten und Items zu verwalten sowie Prozessdaten zu lesen und zu schreiben.
 
 ## Voraussetzungen
 
-* **Python 3:** Das Skript ist in Python 3 geschrieben. Stellen Sie sicher, dass Python 3 auf Ihrem System installiert ist.
-* **Abhängigkeiten:** Die folgenden Python-Bibliotheken müssen installiert sein. Sie können diese mit `pip` installieren:
-    ```bash
-    pip install requests tenacity jsonschema
-    ```
-* **API-Zugangsdaten:** Sie benötigen die Basis-URL der REST-API und einen gültigen API-Schlüssel.
+* **Python 3.6 oder höher** ist auf Ihrem System installiert.
+* Die folgenden Python-Bibliotheken sind installiert (verwenden Sie `pip` zur Installation):
+  ```bash
+  pip install requests jsonschema tenacity
+  ```
+* Sie benötigen einen **API-Schlüssel** für die REST API.
 
-## Installation (für Checkmk)
+## Einrichtung
 
-1.  **Speichern des Skripts:** Speichern Sie das Skript `restclient3.py` im Verzeichnis für lokale Checkmk-Plugins. Der typische Pfad ist:
-    ```
-    /opt/omd/sites/<your_site>/local/lib/nagios/plugins/
-    ```
-    Ersetzen Sie `<your_site>` durch den Namen Ihrer Checkmk-Site.
-2.  **Ausführbarmachen:** Stellen Sie sicher, dass das Skript ausführbar ist:
-    ```bash
-    chmod +x /opt/omd/sites/<your_site>/local/lib/nagios/plugins/restclient3.py
-    ```
+1.  **Speichern Sie das Skript:** Speichern Sie den bereitgestellten Python-Code in einer Datei namens `restclient.py` auf Ihrem System.
+
+2.  **API-Schlüssel:** Stellen Sie sicher, dass Sie Ihren API-Schlüssel kennen. Sie können ihn auf zwei Arten angeben:
+    * **Über die Kommandozeile:** Verwenden Sie die Option `-k` oder `--apiKey`.
+    * **Als Umgebungsvariable:** Setzen Sie die Umgebungsvariable `API_KEY`.
 
 ## Verwendung
 
-Das Skript wird über die Kommandozeile aufgerufen und bietet verschiedene Optionen zur Interaktion mit der REST-API.
+Führen Sie das Skript über die Kommandozeile aus:
 
-### Grundlegende Optionen
+```bash
+python restclient.py <optionen>
+```
 
-* `-s` oder `--server`: Die Basis-URL der REST-API (z.B., `https://yourserver:3001`). **Erforderlich.**
-* `-k` oder `--apiKey`: Der API-Schlüssel für die Authentifizierung. Sie können diesen auch als Umgebungsvariable `API_KEY` setzen. **Erforderlich.**
-* `-db` oder `--dbName`: Der Name der Zieldatenbank (Standard: `DB1`).
-* `-n` oder `--nodeName`: Der Name des Zielknotens (Standard: `PythonRestClient`).
-* `-i` oder `--itemName`: Der Name des Ziel-Items (Standard: `RandomData-<Zufallszahl>`).
-* `-e` oder `--eventsToWrite`: Die Anzahl der zu schreibenden Events (Standard: `10`).
-* `--no-proxy`: Deaktiviert die Verwendung von Proxies (Standard).
-* `--proxy <URL>`: Verwendet den angegebenen Proxy (z.B., `http://user:pass@host:port`).
-* `--verify-ssl`: Aktiviert die SSL-Zertifikatsprüfung (Standard: `True`). Verwenden Sie `--no-verify-ssl` (falls implementiert, andernfalls entfernen Sie `--verify-ssl` aus den Optionen und fügen Sie `--no-verify-ssl` mit `action='store_false', dest='verify_ssl'`) um die Prüfung zu deaktivieren (nicht empfohlen für Produktionsumgebungen).
-* `--timeout <SECONDS>`: Der Timeout für API-Anfragen in Sekunden (Standard: `10`).
-* `-v` oder `--verbose`: Aktiviert ausführliche Ausgabe für Debugging-Zwecke.
+### Allgemeine Optionen
 
-### Spezifische Aktionen
+Diese Optionen können mit allen Aktionen verwendet werden:
+
+* `-s <URL>` oder `--server <URL>`: Die Basis-URL des Servers (z.B., `https://ihrserver:3001`). **Erforderlich**.
+* `-k <KEY>` oder `--apiKey <KEY>`: Ihr API-Schlüssel für die Authentifizierung. **Erforderlich**.
+* `-db <NAME>` oder `--dbName <NAME>`: Der Name der Zieldatenbank (Standard: `DB1`).
+* `-n <NAME>` oder `--nodeName <NAME>`: Der Name des Zielknotens (Standard: `PythonRestClient`).
+* `-i <NAME>` oder `--itemName <NAME>`: Der Name des Ziel-Items (Standard: `RandomData-<Zufallszahl>`).
+* `-e <COUNT>` oder `--eventsToWrite <COUNT>`: Die Anzahl der zu schreibenden Events (Standard: `10`).
+* `--no-proxy`: Deaktiviert die Verwendung von Proxies.
+* `--proxy <URL>`: Verwendet den angegebenen Proxy (z.B., `http://benutzer:passwort@host:port`).
+* `--verify-ssl`: Aktiviert die SSL-Zertifikatsprüfung (Standard: `True`).
+* `--timeout <SEKUNDEN>` oder `--timeout <SEKUNDEN>`: Timeout für API-Anfragen in Sekunden (Standard: `10`).
+* `-v` oder `--verbose`: Aktiviert die ausführliche Ausgabe (Debug-Level-Logging).
+
+### Datenbank- und Knotenverwaltung
 
 * `--list-nodes`: Listet alle Knoten in der angegebenen Datenbank mit ihrem Status für Checkmk auf.
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --list-nodes -db MyDatabase
-    ```
-    Die Ausgabe ist im Checkmk-Format (`<<<local>>>`).
-
-* `--get-node-status <NODE_NAME>`: Ruft den Status eines bestimmten Knotens ab. Verwenden Sie `'all'`, um den Status aller Knoten abzurufen (ebenfalls im Checkmk-Format).
-    ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --get-node-status MyNode -db MyDatabase
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --get-node-status all -db MyDatabase
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --list-nodes -db MeineDatenbank
     ```
 
-* `--read-process-data --start-time <TIMESTAMP> --end-time <TIMESTAMP>`: Liest Prozessdaten vom angegebenen Item innerhalb des gegebenen Zeitraums. Die Zeitstempel müssen im ISO-Format vorliegen (z.B., `2023-10-26T10:00:00`).
+* `--get-node-status <KNOTEN_NAME>`: Ruft den Status eines bestimmten Knotens ab (`all` für alle Knoten).
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --read-process-data -db MyDatabase -n MyNode -i MyItem --start-time 2023-10-26T10:00:00 --end-time 2023-10-26T11:00:00
-    ```
-
-* `--get-item`: Überprüft, ob das angegebene Item existiert und gibt Details im JSON-Format aus.
-    ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --get-item -db MyDatabase -n MyNode -i MyItem
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --get-node-status MeinKnoten -db MeineDatenbank
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --get-node-status all -db MeineDatenbank
     ```
 
 * `--create-node <NAME>`: Erstellt einen neuen Knoten mit dem angegebenen Namen.
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --create-node NewNode -db MyDatabase
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --create-node NeuerKnoten -db MeineDatenbank
     ```
 
-* `--create-item <NAME>`: Erstellt ein neues Item mit dem angegebenen Namen im angegebenen Knoten.
+### Item-Verwaltung
+
+* `--get-item <ID>`: Ruft die Details des Items mit der angegebenen ID ab.
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --create-item NewItem -db MyDatabase -n MyNode
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --get-item 12345 -db MeineDatenbank -n MeinKnoten
     ```
 
-* `--write-process-data`: Schreibt zufällige Prozessdaten zum angegebenen Item. Die Anzahl der Events wird mit `-e` oder `--eventsToWrite` gesteuert.
+* `--create-item <NAME>`: Erstellt ein neues Item mit dem angegebenen Namen.
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --write-process-data -db MyDatabase -n MyNode -i MyItem -e 5
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --create-item SensorWert -db MeineDatenbank -n MeinKnoten
     ```
 
 * `--list-items`: Listet alle Items im angegebenen Knoten auf.
     ```bash
-    ./restclient3.py -s https://yourserver:3001 -k your_api_key --list-items -db MyDatabase -n MyNode
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --list-items -db MeineDatenbank -n MeinKnoten
     ```
 
-### Beispiele für Checkmk
+### Prozessdaten-Verwaltung
 
-Um das Skript als Checkmk-Check zu verwenden, können Sie es direkt aufrufen und die Ausgabe von Checkmk interpretieren lassen. Zum Beispiel, um den Status aller Knoten in der Datenbank `MyDatabase` zu überwachen:
-
-1.  Erstellen Sie eine neue Regel in Checkmk (z.B. unter "Datasource Programs" oder "Integrations").
-2.  Wählen Sie "Programm call instead of agent".
-3.  Konfigurieren Sie den Befehl, z.B.:
+* `--write-process-data`: Schreibt zufällige Prozessdaten zum angegebenen Item.
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --write-process-data -db MeineDatenbank -n MeinKnoten -i SensorWert -e 5
     ```
-    OMD[mysite]:/local/lib/nagios/plugins/restclient3.py -s https://yourserver:3001 -k <your_api_key> --list-nodes -db MyDatabase
+
+* `--read-process-data --start-time <TIMESTAMP> --end-time <TIMESTAMP>`: Liest Prozessdaten vom angegebenen Item innerhalb des angegebenen Zeitraums. Die Zeitstempel müssen im ISO-Format vorliegen (z.B., `2023-10-26T10:00:00`).
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k ihr_api_schlüssel --read-process-data -db MeineDatenbank -n MeinKnoten -i SensorWert --start-time "2024-04-22T09:00:00" --end-time "2024-04-22T09:05:00"
     ```
-    Ersetzen Sie `<your_api_key>` durch Ihren tatsächlichen API-Schlüssel und `mysite` durch Ihren Checkmk-Sitename.
-4.  Stellen Sie sicher, dass die Regel auf die entsprechenden Hosts oder Services angewendet wird.
 
-Checkmk wird die `<<<local>>>`-Sektion in der Ausgabe des Skripts erkennen und die Knotenstatus als Services anzeigen.
+## Beispiele
 
-## Fehlerbehebung
+* **Auflisten aller Knoten und deren Status:**
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k mein_geheimer_schlüssel --list-nodes -db ProduktionsDB
+    ```
 
-* **Falsche API-URL oder -Schlüssel:** Stellen Sie sicher, dass die `-s` und `-k` Parameter korrekt sind.
-* **Netzwerkprobleme:** Überprüfen Sie die Netzwerkverbindung zum REST-API-Server.
-* **Fehlende Abhängigkeiten:** Stellen Sie sicher, dass alle erforderlichen Python-Bibliotheken installiert sind.
-* **Server-seitige Fehler:** Überprüfen Sie die Logs des REST-API-Servers auf mögliche Fehler.
-* **Verbose-Modus:** Verwenden Sie die `-v` oder `--verbose` Option, um detailliertere Informationen über die API-Anfragen und -Antworten zu erhalten.
+* **Abrufen des Status eines bestimmten Knotens:**
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k mein_geheimer_schlüssel --get-node-status OPC_UA_Server -db TestDB
+    ```
 
-## Weiterentwicklung
+* **Erstellen eines neuen Items im Standardknoten:**
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k mein_geheimer_schlüssel --create-item TemperaturSensor -db Messwerte
+    ```
 
-Dieses Skript kann weiterentwickelt werden, um zusätzliche Funktionen der REST-API zu unterstützen, komplexere Validierungen durchzuführen oder in andere Monitoring-Systeme integriert zu werden. Die Verwendung der `RestClient2`-Klasse bietet eine gute Grundlage für zukünftige Erweiterungen.
+* **Schreiben von 100 zufälligen Prozessdaten zum Item "Druck" im Knoten "Verarbeitung":**
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k mein_geheimer_schlüssel --write-process-data -db Steuerung -n Verarbeitung -i Druck -e 100
+    ```
+
+* **Lesen von Prozessdaten des Items "Durchfluss" zwischen zwei Zeitpunkten:**
+    ```bash
+    python restclient.py -s https://ihrserver:3001 -k mein_geheimer_schlüssel --read-process-data -db Analyse -n Datenlogger --itemName Durchfluss --start-time "2024-04-21T12:00:00" --end-time "2024-04-21T13:00:00"
+    ```
+
+## Fehlerbehandlung
+
+Das Skript verwendet das `logging`-Modul, um Informationen und Fehler auszugeben. Achten Sie auf Meldungen in der Konsole, insbesondere wenn etwas nicht wie erwartet funktioniert. Die Option `-v` oder `--verbose` kann zusätzliche Details für die Fehlersuche liefern.
+
+## Hinweise
+
+* Passen Sie die Datenbank-, Knoten- und Item-Namen sowie die Server-URL und den API-Schlüssel an Ihre spezifische REST API an.
+* Behandeln Sie Ihren API-Schlüssel vertraulich.
+* Lesen Sie die Dokumentation Ihrer REST API, um die korrekten Endpunkte und Datenformate zu verstehen.
+```
