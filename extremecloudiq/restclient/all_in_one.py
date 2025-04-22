@@ -476,7 +476,7 @@ def main():
     Ausgabe auf der Konsole (optional reduziert), Speichern in einer JSON-Datei, in Redis und als CSV.
     """
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
-    auth_group = parser.add_mutually_exclusive_group(required=True)
+    auth_group = parser.add_mutually_exclusive_group() # required=False entfernt
     auth_group.add_argument("-k", "--api_key_file", dest="api_key_file", help=f"Pfad zur Datei mit dem gespeicherten API-Token (Standard: {API_KEY_FILE})", default=API_KEY_FILE)
     auth_group.add_argument("-u", "--username", dest="username", help="Benutzername für die XIQ API (für erstmaligen Login oder Token-Erneuerung)")
     auth_group.add_argument("-p", "--password", dest="password", help="Passwort für die XIQ API (für erstmaligen Login oder Token-Erneuerung)")
@@ -514,10 +514,10 @@ def main():
             log.error("Fehler beim Abrufen des API-Tokens. Das Skript wird beendet.")
             sys.exit(1)
     else:
-        # Token aus Datei laden
+        # Versuche, den Token aus der Datei zu laden, falls keine Anmeldeinformationen oder -k angegeben wurden
         api_token = load_api_token(args.api_key_file)
         if not api_token:
-            log.error(f"Kein gültiger API-Token gefunden. Bitte verwenden Sie '-u' und '-p' zum erstmaligen Login.")
+            log.error("Kein gültiger API-Token gefunden. Bitte verwenden Sie '-k' mit dem Pfad zur Token-Datei oder '-u' und '-p' zum erstmaligen Login.")
             sys.exit(1)
 
     if args.get_devicelist:
@@ -552,7 +552,7 @@ def main():
                 log.error("Fehler beim Abrufen der Geräteliste.")
                 sys.exit(1)
         else:
-            log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            log.error("Kein API-Token vorhanden. Das Skript wird beendet.")
             sys.exit(1)
 
     elif args.device_id:
@@ -564,7 +564,7 @@ def main():
                 log.error(f"Fehler beim Abrufen der Details für Gerät mit ID '{args.device_id}'.")
                 sys.exit(1)
         else:
-            log.error("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
+            log.error("Kein API-Token vorhanden. Das Skript wird beendet.")
             sys.exit(1)
 
     elif args.hostname:
