@@ -1,4 +1,3 @@
-Okay, hier ist die aktualisierte `HowTo.md`-Datei, in der `ganzneu6.py` durch `restclient.py` ersetzt wurde:
 
 ```markdown
 # How-To: Interaktion mit der REST API mittels `restclient.py`
