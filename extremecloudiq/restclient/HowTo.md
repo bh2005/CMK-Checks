@@ -1,4 +1,3 @@
-```markdown
 # HowTo: Verwendung des xiq_redis_client.py Skripts
 
 Dieses Dokument beschreibt die Verwendung des `xiq_redis_client.py` Skripts, um mit den in Redis gespeicherten Daten von ExtremeCloud IQ (XIQ) zu interagieren. Dieses Skript ermöglicht das Suchen und Anzeigen von Hostinformationen, die zuvor von einem anderen Prozess (z.B. einem XIQ-API-Abrufer) in Redis gespeichert wurden.
@@ -17,11 +16,11 @@ Dieses Dokument beschreibt die Verwendung des `xiq_redis_client.py` Skripts, um 
 
 Bevor Sie das Skript verwenden, müssen Sie die Verbindungsinformationen für Ihren Redis-Server im Skript selbst anpassen. Öffnen Sie `xiq_redis_client.py` und suchen Sie die folgenden Variablen am Anfang der Datei:
 
-```python
+
 REDIS_HOST = "localhost"  # Standardmäßig localhost
 REDIS_PORT = 6379        # Standardmäßiger Redis-Port
 REDIS_DEVICE_DB = 0      # Datenbank für Geräteinformationen
-```
+
 
 Passen Sie diese Variablen an die Konfiguration Ihres Redis-Servers an.
 
