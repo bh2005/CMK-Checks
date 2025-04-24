@@ -173,13 +173,15 @@ def get_device_by_id(base_url: str, api_token: str, device_id: str) -> Optional[
     """
     Ruft die detaillierten Informationen für ein einzelnes Gerät anhand seiner ID ab.
     """
-    url = f"{base_url}/devices/{device_id}&views=FULL"
+    url = f"{base_url}/devices/{device_id}?views=FULL"
     headers = {"Authorization": f"Bearer {api_token}"}
     log.info(f"Fetching details for device ID '{device_id}'...")
     try:
         response = requests.get(url, headers=headers)
+        log.debug(f"API Status Code: {response.status_code}")
+        log.debug(f"API Response Text: {response.text}")
         response.raise_for_status()
-        device_data = response.json().get('data')
+        device_data = response.json()
         if device_data:
             return process_device(device_data)
         else:
@@ -256,90 +258,22 @@ def store_devices_in_redis(device_list: List[Dict[str, Any]]):
         log.error(f"Unerwarteter Fehler beim Speichern von Geräten in Redis: {e}")
         print(f"Unerwarteter Fehler beim Speichern von Geräten in Redis: {e}")
 
-#def find_hosts(
-#    managed_by: Optional[str] = None,
-#    location_part: Optional[str] = None,
-#    hostname_filter: Optional[str] = None,
-#    device_function: Optional[str] = None,
-#    exact_match: bool = False,
-#) -> List[Dict[str, Any]]:
-#    matching_devices = []
-#    try:
-#        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DEVICE_DB, decode_responses=True)
-#        for key in r.scan_iter("xiq:device:*"):
-#            print(f"Gefundener Schlüssel: {key}")
-#            if key.startswith("xiq:device:id:"):
-#                device_id = key.split(":")[-1]
-#                identifier = f"ID: {device_id}"
-#            else:
-#                identifier = f"Hostname: {key.split(':')[-1]}"
-#
-#            device_json = r.get(key)
-#            if device_json:
-#                device = json.loads(device_json)
-#                device_function_redis = device.get('deviceFunction')
-#                search_term_lower = device_function.lower() if device_function else None
-#                print(f"Überprüfe Gerät ({identifier}) - Geräte-Funktion in Redis: '{device_function_redis}', Länge: {len(device_function_redis or '')}, Suchbegriff (lower): '{search_term_lower}', Länge: {len(search_term_lower or '')}")
-#                match = True
-#
-#                if managed_by is not None:
-#                    managed = device.get("managed")
-#                    managed_check = (managed is not None and
-#                                     ((exact_match and managed.lower() == managed_by.lower() == "true") or
-#                                      (not exact_match and managed.lower() == managed_by.lower() == "true")))
-#                    if not managed_check:
-#                        match = False
-#
-#                if hostname_filter:
-#                    hostname = device.get("hostname", "")
-#                    hostname_check = (exact_match and hostname.lower() == hostname_filter.lower()) or \
-#                                     (not exact_match and hostname_filter.lower() in hostname.lower())
-#                    if not hostname_check:
-#                        match = False
-#
-#                if location_part:
-#                    locations = device.get("locations", [])
-#                    location_match = False
-#                    for loc in locations:
-#                        location_name = loc.get("name", "")
-#                        if (exact_match and location_name.lower() == location_part.lower()) or \
-#                           (not exact_match and location_part.lower() in location_name.lower()):
-#                            location_match = True
-#                            break
-#                    if not location_match:
-#                        match = False
-#
-#                if device_function:
-#                    if device_function_redis is not None:
-#                        device_function_check = (exact_match and device_function_redis.lower() == search_term_lower) or \
-#                                                (not exact_match and search_term_lower in device_func_redis.lower())
-#                        if not device_function_check:
-#                            match = False
-#                    else:
-#                        match = False
-#
-#                if match:
-#                    matching_devices.append(device)
-#    except redis.exceptions.ConnectionError as e:
-#        log.error(f"Fehler bei der Verbindung zu Redis (db={REDIS_DEVICE_DB}) während der Suche: {e}")
-#        print(f"Fehler bei der Verbindung zu Redis (db={REDIS_DEVICE_DB}) während der Suche: {e}")
-#    except Exception as e:
-#        log.error(f"Unerwarteter Fehler bei der Suche in Redis: {e}")
-#        print(f"Unerwarteter Fehler bei der Suche in Redis: {e}")
-#    return matching_devices
-
 def find_hosts(
     managed_by: Optional[str] = None,
     location_part: Optional[str] = None,
     hostname_filter: Optional[str] = None,
     device_function: Optional[str] = None,
     exact_match: bool = False,
+    verbose: bool = False,  # Neues verbose-Argument
 ) -> List[Dict[str, Any]]:
+    if verbose:
+        print(f"Redis Host: {REDIS_HOST}, Port: {REDIS_PORT}, DB: {REDIS_DEVICE_DB}")
     matching_devices = []
     try:
         r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DEVICE_DB, decode_responses=True)
-        for key in r.scan_iter():  # <--- Geändert: Durchlaufe alle Schlüssel
-            print(f"Gefundener Schlüssel: {key}") # <--- Debug-Ausgabe aller Schlüssel
+        for key in r.scan_iter():
+            if verbose:
+                print(f"Gefundener Schlüssel: {key}")
             if key.startswith("xiq:device:"):
                 if key.startswith("xiq:device:id:"):
                     device_id = key.split(":")[-1]
@@ -348,31 +282,52 @@ def find_hosts(
                     identifier = f"Hostname: {key.split(':')[-1]}"
 
                 device_json = r.get(key)
+                if key.startswith("xiq:device:sw-de-ks-bvs1-keller-02") and verbose:
+                    print(f"  *** SPEZIAL-DEBUG für {key}: Raw JSON = {device_json} ***")
                 if device_json:
-                    print(f"  Raw JSON from Redis for key '{key}': {device_json}") # <<< DEBUG
-                    device = json.loads(device_json)
-                    device_function_redis = device.get('deviceFunction')
-                    search_term_lower = device_function.lower() if device_function else None
-                    print(f"  Überprüfe Gerät ({identifier}) - Geräte-Funktion in Redis: '{device_function_redis}', Länge: {len(device_function_redis or '')}, Suchbegriff (lower): '{search_term_lower}', Länge: {len(search_term_lower or '')}")
+                    if verbose:
+                        print(f"  Raw JSON from Redis for key '{key}': {device_json}")
+                        device = json.loads(device_json)
+                        print(f"  Parsed device dictionary: {device}")
+                        try:
+                            device_function_redis = device['device_function'] # Direkter Zugriff
+                        except KeyError:
+                            device_function_redis = None
+                        search_term_lower = device_function.lower() if device_function else None
+                        print(f"  Überprüfe Gerät ({identifier}) - Geräte-Funktion in Redis: '{device_function_redis}', Länge: {len(device_function_redis or '')}, Suchbegriff (lower): '{search_term_lower}', Länge: {len(search_term_lower or '')}")
+                    else:
+                        device = json.loads(device_json)
+                        try:
+                            device_function_redis = device['device_function'] # Direkter Zugriff
+                        except KeyError:
+                            device_function_redis = None
+                        search_term_lower = device_function.lower() if device_function else None
+
                     match = True
 
                     if managed_by is not None:
-                        managed = device.get("managed")
-                        managed_check = (managed is not None and
-                                         ((exact_match and managed.lower() == managed_by.lower() == "true") or
-                                          (not exact_match and managed.lower() == managed_by.lower() == "true")))
-                        if not managed_check:
+                        managed = device.get("managed_by")
+                        if managed is not None:
+                            managed_lower = managed.lower()
+                            managed_by_lower = managed_by.lower()
+                            if exact_match:
+                                if managed_lower != managed_by_lower:
+                                    match = False
+                            else:
+                                if managed_by_lower not in managed_lower:
+                                    match = False
+                        else:
                             match = False
 
                     if hostname_filter:
-                        hostname_lower = hostname.lower()
+                        hostname_lower = device.get("hostname", "").lower()
                         hostname_filter_lower = hostname_filter.lower()
                         if exact_match:
-                            hostname_check = hostname_lower == hostname_filter_lower
+                            if hostname_lower != hostname_filter_lower:
+                                match = False
                         else:
-                            hostname_check = hostname_filter_lower in hostname_lower
-                        if not hostname_check:
-                            match = False
+                            if hostname_filter_lower not in hostname_lower:
+                                match = False
 
                     if location_part:
                         locations = device.get("locations", [])
@@ -393,11 +348,8 @@ def find_hosts(
 
                     if device_function:
                         if device_function_redis is not None:
-                            search_term_lower = device_function.lower()
-                            if exact_match:
-                                device_function_check = device_function_redis.lower() == search_term_lower
-                            else:
-                                device_function_check = search_term_lower in device_function_redis.lower()
+                            device_function_check = (exact_match and device_function_redis.lower() == search_term_lower) or \
+                                                    (not exact_match and search_term_lower in device_function_redis.lower())
                             if not device_function_check:
                                 match = False
                         else:
@@ -674,12 +626,28 @@ def handle_get_devicelist(args, api_token):
         sys.exit(1)
 
 def handle_get_device_by_id(args, api_token):
-    device_details = get_device_by_id(args.serverRoot, api_token, args.device_id)
-    if device_details:
-        print(json.dumps(device_details, indent=4))
+    if api_token:
+        device_id = args.device_id
+        device_data = get_device_by_id(args.serverRoot, api_token, device_id)
+        if device_data:
+            if args.pretty_print:
+                print(pretty_print_device(device_data))
+            else:
+                print(device_data) # Vollständige JSON-Ausgabe
+        else:
+            log.error(f"Fehler beim Abrufen der Details für Gerät mit ID '{device_id}'.")
     else:
-        log.error(f"Fehler beim Abrufen der Details für Gerät mit ID '{args.device_id}'.")
+        log.error("Kein API-Token vorhanden...")
+        print("Kein API-Token vorhanden...")
         sys.exit(1)
+        
+def get_device_id_by_hostname_from_redis(hostname: str) -> Optional[str]:
+    matching_devices = find_hosts(hostname_filter=hostname, exact_match=True)
+    if matching_devices:
+        # Da der Hostname eindeutig sein sollte, nehmen wir das erste Ergebnis
+        return str(matching_devices[0].get("id"))
+    else:
+        return None
 
 def handle_get_device_by_hostname(args):
     device_from_redis = get_device_from_redis_by_hostname(args.hostname)
@@ -688,13 +656,14 @@ def handle_get_device_by_hostname(args):
     else:
         log.warning(f"Keine Geräteinformationen für Hostname '{args.hostname}' in Redis gefunden.")
 
-def handle_find_hosts(args):
+def handle_find_hosts(args, verbose):
     matching_devices = find_hosts(
         args.managed_by_value,
         args.location_name_part,
         args.hostname_value,
         args.device_function,
         args.exact_match,
+        verbose=verbose,  # Hier wird das verbose-Argument übergeben
     )
     if matching_devices:
         print("Gefundene Hosts:")
@@ -703,8 +672,8 @@ def handle_find_hosts(args):
             print(f"  Hostname: {device.get('hostname')}")
             print(f"  MAC-Adresse: {device.get('mac_address')}")
             print(f"  IP-Adresse: {device.get('ip_address')}")
-            print(f"  Managed: {device.get('managed')}")
-            print(f"  Device Function: {device.get('deviceFunction')}")
+            print(f"  Managed: {device.get('managed_by')}")
+            print(f"  Device Function: {device.get('device_function')}")
             print(f"  Locations: {[loc.get('name') for loc in device.get('locations', [])]}")
             print("-" * 20)
     else:
@@ -735,6 +704,39 @@ def handle_find_location(args):
     else:
         print(f"Keine Location mit dem Suchbegriff '{args.search_location}' gefunden.")
 
+
+def handle_get_device_details_by_hostname(args, api_token):
+    hostname = args.hostname_details
+    if not hostname:
+        print("Bitte geben Sie einen Hostnamen an, um die Details abzurufen.")
+        return
+
+    device_id_from_redis = get_device_id_by_hostname_from_redis(hostname)
+    if device_id_from_redis:
+        print(f"Geräte-ID '{device_id_from_redis}' für Hostname '{hostname}' in Redis gefunden. Rufe Details von der API ab...")
+        device_details = get_device_by_id(args.serverRoot, api_token, device_id_from_redis)
+        if device_details:
+            if args.pretty_print:
+                print(pretty_print_device(device_details))
+            else:
+                print(device_details) # Vollständige JSON-Ausgabe
+        else:
+            print(f"Fehler beim Abrufen der Details für Gerät mit ID '{device_id_from_redis}'.")
+    else:
+        print(f"Keine Geräte-ID für Hostname '{hostname}' in Redis gefunden.")
+
+def pretty_print_device(device: Dict[str, Any]) -> str:
+    output = f"Geräte-ID: {device.get('id')}\n"
+    output += f"Hostname: {device.get('hostname')}\n"
+    output += f"MAC-Adresse: {device.get('mac_address')}\n"
+    output += f"IP-Adresse: {device.get('ip_address')}\n"
+    output += f"Device Function: {device.get('device_function')}\n"
+    output += f"Managed By: {device.get('managed_by')}\n"
+    locations = [loc.get('name') for loc in device.get('locations', [])]
+    output += f"Standorte: {', '.join(locations)}\n"
+    output += "-" * 20
+    return output
+
 def main():
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
 
@@ -750,6 +752,8 @@ def main():
     api_group.add_argument("-s", "--server", dest="serverRoot", default="https://api.extremecloudiq.com", help="Basis-URL der XIQ API.")
     api_group.add_argument("--get-devicelist", action="store_true", help="Ruft die Liste der Geräte ab.")
     api_group.add_argument("--get-device-by-id", dest="device_id", help="Ruft die Details für ein Gerät mit der angegebenen ID ab.")
+    api_group.add_argument("--get-device-details-by-hostname", dest="hostname_details", help="Ruft die Details für ein Gerät mit dem angegebenen Hostnamen ab (ID wird aus Redis abgerufen).")
+    api_group.add_argument("-pp", "--pretty-print", action="store_true", help="Ausgabe der Geräte-Details im lesbaren Format.")
     api_group.add_argument("--get-device-status", dest="location_id", help="Ruft die Gerätestatusübersicht für die angegebene Location-ID ab.")
     api_group.add_argument("--get-locations-tree", action="store_true", help="Ruft den Location Tree ab und speichert ihn in Redis (db=1).")
     api_group.add_argument("--find-location", dest="search_location", help="Sucht nach einer Location im Location Tree (Redis db=1) und gibt unique_name und id aus.")
@@ -800,10 +804,11 @@ def main():
         args.get_devicelist: lambda: handle_get_devicelist(args, api_token),
         args.device_id: lambda: handle_get_device_by_id(args, api_token),
         args.hostname: lambda: handle_get_device_by_hostname(args),
-        args.find_hosts: lambda: handle_find_hosts(args),
+        args.find_hosts: lambda: handle_find_hosts(args, verbose=args.verbose),
         args.location_id: lambda: handle_get_device_status(args, api_token),
         args.get_locations_tree: lambda: handle_get_locations_tree(api_token),
         args.search_location: lambda: handle_find_location(args),
+        args.hostname_details: lambda: handle_get_device_details_by_hostname(args, api_token),
     }
 
     executed = False
