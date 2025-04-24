@@ -1,4 +1,4 @@
-# HowTo: Using the xiq_rest_client2.py Script
+# HowTo: Using the xiq_redis_client.py Script
 
 This document describes how to use the `xiq_rest_client2.py` script to interact with the ExtremeCloud IQ (XIQ) API and with data stored in Redis.
 
