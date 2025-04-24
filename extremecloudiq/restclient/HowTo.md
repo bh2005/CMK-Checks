@@ -1,122 +1,106 @@
 ```markdown
-# xiq_rest_client.py
+# HowTo: Verwendung des xiq_redis_client.py Skripts
 
-Dieses Python-Skript interagiert mit der ExtremeCloud IQ (XIQ) API, um verschiedene Informationen abzurufen und diese optional auf der Konsole anzuzeigen, in einer JSON-Datei zu speichern, in einer Redis-Datenbank zu speichern und/oder als CSV-Datei zu exportieren. Es bietet auch Funktionen zur Suche nach Hosts in Redis und zur Abfrage des Location Tree.
+Dieses Dokument beschreibt die Verwendung des `xiq_redis_client.py` Skripts, um mit den in Redis gespeicherten Daten von ExtremeCloud IQ (XIQ) zu interagieren. Dieses Skript ermöglicht das Suchen und Anzeigen von Hostinformationen, die zuvor von einem anderen Prozess (z.B. einem XIQ-API-Abrufer) in Redis gespeichert wurden.
 
 ## Voraussetzungen
 
-* **Python 3.6 oder höher**
-* **requests** Bibliothek (`pip install requests`)
-* **redis** Bibliothek (`pip install redis`)
-* **csv** Bibliothek (ist Teil der Python-Standardbibliothek)
+* **Python 3:** Das Skript ist in Python 3 geschrieben. Stellen Sie sicher, dass Python 3 auf Ihrem System installiert ist.
+* **Redis Python Bibliothek:** Das Skript verwendet die `redis` Python Bibliothek, um mit dem Redis-Server zu kommunizieren. Installieren Sie diese mit pip:
+    ```bash
+    pip install redis
+    ```
+* **Redis Server:** Ein laufender Redis-Server, der die XIQ-Daten enthält. Die Host- und Port-Informationen des Redis-Servers müssen im Skript konfiguriert sein (siehe Konfiguration).
+* **XIQ-Daten in Redis:** Es wird davon ausgegangen, dass bereits XIQ-Geräteinformationen im Redis-Cache in einem bestimmten Format gespeichert sind. Dieses Skript ist darauf ausgelegt, diese vorhandenen Daten abzufragen.
 
-## Einrichtung
+## Konfiguration
 
-1.  **API-Token:**
-    * Sie benötigen einen API-Token für Ihre ExtremeCloud IQ Organisation.
-    * Das Skript versucht, den Token aus der Datei `xiq_api_token.txt` im selben Verzeichnis zu lesen.
-    * Alternativ können Sie Benutzername und Passwort über die Kommandozeile angeben, um sich einzuloggen und einen neuen Token zu erhalten, der dann in der Datei gespeichert wird.
+Bevor Sie das Skript verwenden, müssen Sie die Verbindungsinformationen für Ihren Redis-Server im Skript selbst anpassen. Öffnen Sie `xiq_redis_client.py` und suchen Sie die folgenden Variablen am Anfang der Datei:
 
-2.  **Redis (optional):**
-    * Wenn Sie die Redis-Funktionen nutzen möchten, stellen Sie sicher, dass ein Redis-Server lokal auf `localhost:6379` läuft oder passen Sie die `REDIS_HOST` und `REDIS_PORT` Variablen im Skript an.
+```python
+REDIS_HOST = "localhost"  # Standardmäßig localhost
+REDIS_PORT = 6379        # Standardmäßiger Redis-Port
+REDIS_DEVICE_DB = 0      # Datenbank für Geräteinformationen
+```
+
+Passen Sie diese Variablen an die Konfiguration Ihres Redis-Servers an.
 
 ## Verwendung
 
-Führen Sie das Skript über die Kommandozeile aus:
+Das Skript wird über die Befehlszeile aufgerufen und bietet verschiedene Optionen zum Suchen und Anzeigen von Hostinformationen.
 
 ```bash
-python xiq_rest_client.py <optionen>
+python xiq_redis_client.py [OPTIONEN]
 ```
 
-### Authentifizierungsoptionen (EINE davon ist erforderlich):
+### Optionen
 
-* `-k` oder `--api_key_file <pfad>`: Pfad zur Datei mit dem gespeicherten API-Token (Standard: `xiq_api_token.txt`).
-* `-u` oder `--username <benutzername>`: Benutzername für die XIQ API (für erstmaligen Login oder Token-Erneuerung).
-* `-p` oder `--password <passwort>`: Passwort für die XIQ API (für erstmaligen Login oder Token-Erneuerung).
+* `-f`, `--find-hosts`: Aktiviert den Suchmodus für Hosts in Redis. Muss verwendet werden, um Suchkriterien anzuwenden.
+* `-m`, `--managed_by <MANAGED_BY>`: Filtert Hosts nach dem Wert des Feldes `managed_by` (z.B. `XIQ`).
+* `-l`, `--location-part <LOCATION_PART>`: Filtert Hosts, deren Location-Name den angegebenen Teilstring enthält (Groß-/Kleinschreibung wird ignoriert).
+* `--hostname-filter <HOSTNAME>`: Filtert Hosts nach dem Hostnamen (Teilstring-Suche, Groß-/Kleinschreibung wird ignoriert).
+* `--device-function <DEVICE_FUNCTION>`: Filtert Hosts nach der Gerätefunktion (z.B. `AP`, `Switch`, Groß-/Kleinschreibung wird ignoriert).
+* `--exact-match`: Erzwingt eine exakte Übereinstimmung für alle Filterkriterien (`managed_by`, `location-part`, `hostname-filter`, `device-function`). Ohne diese Option wird eine Teilstring-Suche durchgeführt (case-insensitive).
+* `-v`, `--verbose`: Aktiviert die ausführliche Ausgabe. Zeigt zusätzliche Debug-Informationen während der Suche an (z.B. die durchsuchten Redis-Keys).
 
-### API-Interaktionsoptionen:
+### Beispiele
 
-* `-s` oder `--server <basis_url>`: Basis-URL der XIQ API (Standard: `https://api.extremecloudiq.com`).
-* `--get-devicelist`: Ruft die Liste der Geräte ab.
-* `--get-device-by-id <geräte_id>`: Ruft die Details für ein Gerät mit der angegebenen ID ab.
-* `--get-device-by-hostname <hostname>`: Ruft die Details für ein Gerät mit dem angegebenen Hostnamen aus Redis ab.
-* `-f` oder `--find-hosts`: Sucht Hosts in Redis basierend auf optionalen Kriterien.
-    * `-m` oder `--managed_by <wert>`: Optional: Filter für `managed_by` bei der Redis-Suche.
-    * `-l` oder `--location_part <teil_des_namens>`: Optional: Teil des Location-Namens für die Redis-Suche.
-    * `--hostname-filter <hostname>`: Optional: Hostname für die Redis-Suche.
-* `--get-device-status <location_id>`: Ruft die Gerätestatusübersicht für die angegebene Location-ID ab.
-* `--get-locations-tree`: Ruft den Location Tree von der API ab, gibt ihn auf der Konsole aus und speichert ihn in Redis (Datenbank 1).
-* `--find-location <suchbegriff>`: Sucht nach einer Location im Location Tree (Redis Datenbank 1) und gibt `unique_name` und `id` aus.
-
-### Ausgabeoptionen:
-
-* `-o` oder `--output_file <dateiname>`: Dateiname für die Ausgabe der Geräteliste (JSON, Standard: `XiqDeviceList.json`).
-* `--store-redis`: Speichert die Geräteinformationen in Redis (Datenbank 0).
-* `--show-pretty`: Zeigt eine vereinfachte Ausgabe der Geräte (id, hostname, mac, ip) auf der Konsole.
-* `--output-csv <dateiname>`: Dateiname für die Ausgabe der Geräteliste als CSV.
-* `-v` oder `--verbose`: Ausführliche Ausgabe aktivieren (Debug-Level-Logging).
-
-## Beispiele
-
-* **Einloggen und API-Token speichern:**
+1.  **Alle Hosts anzeigen:**
     ```bash
-    python xiq_rest_client.py -u meinbenutzer -p meinpasswort
+    python xiq_redis_client.py -f
     ```
 
-* **Geräteliste abrufen und als JSON speichern:**
+2.  **Hosts suchen, die von "XIQ" verwaltet werden:**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-devicelist -o devices.json
+    python xiq_redis_client.py -f -m XIQ
     ```
 
-* **Geräteliste abrufen und vereinfacht auf der Konsole anzeigen:**
+3.  **Hosts suchen, die den Teilstring "Floor" im Location-Namen haben:**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-devicelist --show-pretty
+    python xiq_redis_client.py -f -l Floor
     ```
 
-* **Gerät mit der ID `12345` abrufen:**
+4.  **Hosts mit dem Hostnamen "my-ap-01" suchen (Teilstring):**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-device-by-id 12345
+    python xiq_redis_client.py -f --hostname-filter my-ap-01
     ```
 
-* **Geräteinformationen für den Hostnamen `mydevice` aus Redis abrufen:**
+5.  **Hosts mit der Gerätefunktion "Switch" suchen (exakte Übereinstimmung):**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-device-by-hostname mydevice
+    python xiq_redis_client.py -f --device-function Switch --exact-match
     ```
 
-* **Hosts in Redis suchen, die von `ExtremeCloud IQ` verwaltet werden und `floor1` im Location-Namen haben:**
+6.  **Hosts suchen, die von "on-prem" verwaltet werden und "Building A" im Location-Namen haben (Teilstring-Suche):**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt -f -m "ExtremeCloud IQ" -l "floor1"
+    python xiq_redis_client.py -f -m on-prem -l "Building A"
     ```
 
-* **Gerätestatusübersicht für die Location-ID `98765` abrufen:**
+7.  **Ausführliche Suche nach Hosts mit dem Hostnamen "edge-switch-42":**
     ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-device-status 98765
+    python xiq_redis_client.py -f --hostname-filter edge-switch-42 -v
     ```
 
-* **Location Tree abrufen und in Redis speichern:**
-    ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --get-locations-tree
-    ```
+## Ausgabe
 
-* **Nach einer Location mit dem Namensteil `LOC257` suchen:**
-    ```bash
-    python xiq_rest_client.py -k xiq_api_token.txt --find-location LOC257
-    ```
+Das Skript gibt eine Liste der gefundenen Hosts auf der Konsole aus. Für jeden übereinstimmenden Host werden die folgenden Informationen angezeigt:
 
-## Redis Datenbanken
+* ID
+* Hostname
+* MAC-Adresse
+* IP-Adresse
+* Managed By
+* Device Function
+* Locations (als Liste der Namen)
 
-Das Skript verwendet zwei Redis-Datenbanken:
+## Fehlerbehebung
 
-* **Datenbank 0 (Standard):** Wird verwendet, um Geräteinformationen zu speichern, die von der `/devices` API abgerufen werden. Die Schlüssel haben das Format `xiq:device:<hostname>`.
-* **Datenbank 1:** Wird verwendet, um den Location Tree zu speichern, der von der `/locations/tree` API abgerufen wird. Der Schlüssel ist `xiq:locations:tree`.
+* **`redis.exceptions.ConnectionError`:** Stellen Sie sicher, dass der Redis-Server läuft und die in den Skriptvariablen `REDIS_HOST` und `REDIS_PORT` angegebenen Verbindungsinformationen korrekt sind.
+* **Keine Ausgabe:** Wenn das Skript keine Hosts findet, überprüfen Sie Ihre Suchkriterien und stellen Sie sicher, dass die XIQ-Daten in Redis vorhanden sind und die gesuchten Felder die erwarteten Werte enthalten. Verwenden Sie die Option `-v`, um zu sehen, welche Redis-Keys durchsucht werden.
+* **Falsche Filterung:** Überprüfen Sie die Groß-/Kleinschreibung und die Verwendung von `--exact-match`, wenn Ihre Filter nicht die erwarteten Ergebnisse liefern.
 
-## Fehlerbehandlung
+## Weiterentwicklung
 
-Das Skript enthält grundlegende Fehlerbehandlung für API-Aufrufe, JSON-Verarbeitung, Dateizugriff und Redis-Verbindungen. Bei API-Fehlern werden detaillierte Fehlermeldungen ausgegeben.
-
-## Hinweise
-
-* Behandeln Sie Ihren API-Token sicher und geben Sie ihn nicht an Dritte weiter.
-* Seien Sie vorsichtig bei der Verwendung von Befehlen wie `KEYS *` in großen Redis-Produktionsumgebungen, da diese die Serverleistung beeinträchtigen können. Erwägen Sie die Verwendung von `SCAN` für eine schrittweise Iteration.
-* Die Struktur der von der XIQ API zurückgegebenen Daten kann sich ändern. Passen Sie das Skript bei Bedarf an.
+Dieses Skript bietet eine einfache Möglichkeit, in Redis gespeicherte XIQ-Daten abzufragen. Es kann nach Bedarf erweitert werden, um zusätzliche Filterkriterien, eine formatiertere Ausgabe oder die Interaktion mit anderen Daten in Redis zu ermöglichen.
 ```
+
+Diese `HowTo.md`-Datei sollte eine gute Grundlage für die Verwendung des `xiq_redis_client.py` Skripts bieten. Du kannst sie bei Bedarf noch weiter anpassen oder ergänzen.
