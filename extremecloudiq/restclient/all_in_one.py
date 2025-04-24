@@ -178,6 +178,8 @@ def get_device_by_id(base_url: str, api_token: str, device_id: str) -> Optional[
     log.info(f"Fetching details for device ID '{device_id}'...")
     try:
         response = requests.get(url, headers=headers)
+        log.debug(f"API Status Code: {response.status_code}")
+        log.debug(f"API Response Text: {response.text}")
         response.raise_for_status()
         device_data = response.json()
         if device_data:
@@ -624,11 +626,19 @@ def handle_get_devicelist(args, api_token):
         sys.exit(1)
 
 def handle_get_device_by_id(args, api_token):
-    device_details = get_device_by_id(args.serverRoot, api_token, args.device_id)
-    if device_details:
-        print(json.dumps(device_details, indent=4))
+    if api_token:
+        device_id = args.device_id
+        device_data = get_device_by_id(args.serverRoot, api_token, device_id)
+        if device_data:
+            if args.pretty_print:
+                print(pretty_print_device(device_data))
+            else:
+                print(device_data) # Vollständige JSON-Ausgabe
+        else:
+            log.error(f"Fehler beim Abrufen der Details für Gerät mit ID '{device_id}'.")
     else:
-        log.error(f"Fehler beim Abrufen der Details für Gerät mit ID '{args.device_id}'.")
+        log.error("Kein API-Token vorhanden...")
+        print("Kein API-Token vorhanden...")
         sys.exit(1)
         
 def get_device_id_by_hostname_from_redis(hostname: str) -> Optional[str]:
@@ -693,7 +703,8 @@ def handle_find_location(args):
         print(f"  ID: {location_info.get('id')}")
     else:
         print(f"Keine Location mit dem Suchbegriff '{args.search_location}' gefunden.")
-        
+
+
 def handle_get_device_details_by_hostname(args, api_token):
     hostname = args.hostname_details
     if not hostname:
@@ -703,10 +714,28 @@ def handle_get_device_details_by_hostname(args, api_token):
     device_id_from_redis = get_device_id_by_hostname_from_redis(hostname)
     if device_id_from_redis:
         print(f"Geräte-ID '{device_id_from_redis}' für Hostname '{hostname}' in Redis gefunden. Rufe Details von der API ab...")
-        get_device_by_id(args.serverRoot, api_token, device_id_from_redis)
+        device_details = get_device_by_id(args.serverRoot, api_token, device_id_from_redis)
+        if device_details:
+            if args.pretty_print:
+                print(pretty_print_device(device_details))
+            else:
+                print(device_details) # Vollständige JSON-Ausgabe
+        else:
+            print(f"Fehler beim Abrufen der Details für Gerät mit ID '{device_id_from_redis}'.")
     else:
         print(f"Keine Geräte-ID für Hostname '{hostname}' in Redis gefunden.")
 
+def pretty_print_device(device: Dict[str, Any]) -> str:
+    output = f"Geräte-ID: {device.get('id')}\n"
+    output += f"Hostname: {device.get('hostname')}\n"
+    output += f"MAC-Adresse: {device.get('mac_address')}\n"
+    output += f"IP-Adresse: {device.get('ip_address')}\n"
+    output += f"Device Function: {device.get('device_function')}\n"
+    output += f"Managed By: {device.get('managed_by')}\n"
+    locations = [loc.get('name') for loc in device.get('locations', [])]
+    output += f"Standorte: {', '.join(locations)}\n"
+    output += "-" * 20
+    return output
 
 def main():
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API.")
@@ -724,6 +753,7 @@ def main():
     api_group.add_argument("--get-devicelist", action="store_true", help="Ruft die Liste der Geräte ab.")
     api_group.add_argument("--get-device-by-id", dest="device_id", help="Ruft die Details für ein Gerät mit der angegebenen ID ab.")
     api_group.add_argument("--get-device-details-by-hostname", dest="hostname_details", help="Ruft die Details für ein Gerät mit dem angegebenen Hostnamen ab (ID wird aus Redis abgerufen).")
+    api_group.add_argument("-pp", "--pretty-print", action="store_true", help="Ausgabe der Geräte-Details im lesbaren Format.")
     api_group.add_argument("--get-device-status", dest="location_id", help="Ruft die Gerätestatusübersicht für die angegebene Location-ID ab.")
     api_group.add_argument("--get-locations-tree", action="store_true", help="Ruft den Location Tree ab und speichert ihn in Redis (db=1).")
     api_group.add_argument("--find-location", dest="search_location", help="Sucht nach einer Location im Location Tree (Redis db=1) und gibt unique_name und id aus.")
