@@ -173,7 +173,7 @@ def get_device_by_id(base_url: str, api_token: str, device_id: str) -> Optional[
     """
     Ruft die detaillierten Informationen für ein einzelnes Gerät anhand seiner ID ab.
     """
-    url = f"{base_url}/devices/{device_id}?views=FULL"
+    url = f"{base_url}/devices/{device_id}&views=FULL"
     headers = {"Authorization": f"Bearer {api_token}"}
     log.info(f"Fetching details for device ID '{device_id}'...")
     try:
