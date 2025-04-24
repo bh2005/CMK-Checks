@@ -695,15 +695,58 @@ def handle_get_locations_tree(api_token):
         print("Kein API-Token vorhanden. Bitte loggen Sie sich zuerst ein oder geben Sie den Pfad zur Token-Datei an.")
         sys.exit(1)
 
-def handle_find_location(args):
-    location_info = get_location_info_by_name(args.search_location)
-    if location_info:
-        print("Gefundene Location:")
-        print(f"  unique_name: {location_info.get('unique_name')}")
-        print(f"  ID: {location_info.get('id')}")
-    else:
-        print(f"Keine Location mit dem Suchbegriff '{args.search_location}' gefunden.")
 
+def handle_find_location(args):
+    #print("handle_find_location wurde aufgerufen!") 
+    search_term = args.search_location
+    if search_term:
+        found_locations = find_location(search_term)
+        if found_locations:
+            print("Gefundene Locations:")
+            for loc in found_locations:
+                print(f"  Unique Name: {loc.get('unique_name')}")
+                print(f"  ID: {loc.get('id')}")
+                print("-" * 20)
+        else:
+            print(f"Keine Location mit dem Suchbegriff '{search_term}' gefunden.")
+    else:
+        print("Bitte geben Sie einen Suchbegriff für die Location an (--search-location).")
+
+def find_location(search_term: str) -> List[Dict[str, Any]]:
+    matching_locations = []
+    try:
+        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=1, decode_responses=True)
+        locations_json = r.get("xiq:locations:tree")
+        if locations_json:
+            try:
+                locations_data = json.loads(locations_json)
+
+                def search_recursive(data, term):
+                    found = []
+                    if isinstance(data, dict):
+                        if 'name' in data and term.lower() in data['name'].lower():
+                            found.append(data)
+                        for value in data.values():
+                            found.extend(search_recursive(value, term))
+                    elif isinstance(data, list):
+                        for item in data:
+                            found.extend(search_recursive(item, term))
+                    return found
+
+                matching_locations.extend(search_recursive(locations_data, search_term))
+
+            except json.JSONDecodeError as e:
+                log.error(f"Fehler beim Decodieren des Location Tree aus Redis: {e}")
+                print(f"Fehler beim Decodieren des Location Tree aus Redis: {e}")
+        else:
+            print("Der Location Tree ist nicht in Redis gespeichert.")
+    except redis.exceptions.ConnectionError as e:
+        log.error(f"Fehler bei der Verbindung zu Redis (db=1): {e}")
+        print(f"Fehler bei der Verbindung zu Redis (db=1): {e}")
+    except Exception as e:
+        log.error(f"Unerwarteter Fehler bei der Suche nach Locations: {e}")
+        print(f"Unerwarteter Fehler bei der Suche nach Locations: {e}")
+    return matching_locations
 
 def handle_get_device_details_by_hostname(args, api_token):
     hostname = args.hostname_details
