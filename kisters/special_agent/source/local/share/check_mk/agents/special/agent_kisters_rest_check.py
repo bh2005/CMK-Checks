@@ -48,7 +48,6 @@ def main(args=None):
             pvId = entry.get("pvId")
             password = cmk.utils.password_store.lookup(password_id) if password_id else None
 
-            # Add pvId as query parameter if provided
             if pvId:
                 url = f"{url}?pvId={pvId}" if "?" not in url else f"{url}&pvId={pvId}"
 
