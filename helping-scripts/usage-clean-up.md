@@ -40,57 +40,6 @@ Am Ende wird eine Zusammenfassung der gesamt gelöschten Dateien und des freigeg
 
 ---
 
-## English
-
-### Description
-This Bash script deletes files in the directory `/opt/omd/sites/$site/var/check_mk/inventory_archive/` that are older than the specified number of days. It is designed for use with Check_MK/OMD systems to free up space in the archive directory.
-
-### Usage
-```bash
-./script.sh [days]
-```
-
-- **days**:
-
-# Verwendung des Skripts
-
-## Deutsch
-
-### Beschreibung
-Dieses Bash-Skript löscht Dateien im Verzeichnis `/opt/omd/sites/$site/var/check_mk/inventory_archive/`, die älter als die angegebene Anzahl von Tagen sind. Es ist für die Verwendung mit Check_MK/OMD-Systemen gedacht, um Platz im Archivverzeichnis freizugeben.
-
-### Verwendung
-```bash
-./script.sh [Tage]
-```
-
-- **Tage**: (Optional) Anzahl der Tage, nach denen Dateien als veraltet gelten und gelöscht werden. Standardwert ist 30 Tage.
-- **Hilfe**: Verwende `-h` oder `--help`, um die Hilfe anzuzeigen.
-
-### Beispiel
-```bash
-./script.sh 45
-```
-Löscht alle Dateien, die älter als 45 Tage sind, in den Archivverzeichnissen aller OMD-Sites.
-
-### Ausgabe
-Das Skript gibt für jede Site Folgendes aus:
-- Verzeichnis, das durchsucht wird.
-- Anzahl der gelöschten Dateien.
-- Freigegebener Speicherplatz (in lesbarem Format).
-Am Ende wird eine Zusammenfassung der gesamt gelöschten Dateien und des freigegebenen Speicherplatzes angezeigt.
-
-### Voraussetzungen
-- Das Skript muss mit Root- oder ausreichenden Berechtigungen ausgeführt werden, um Dateien in `/opt/omd/sites` löschen zu können.
-- Das `omd`-Kommando muss verfügbar sein, um die Liste der Sites abzurufen.
-- Die Befehle `find`, `rm`, `du` und `awk` müssen installiert sein (üblicherweise auf Linux-Systemen vorhanden).
-
-### Hinweise
-- **Vorsicht**: Das Skript löscht Dateien unwiderruflich. Stelle sicher, dass du die Konsequenzen verstehst, bevor du es ausführst.
-- Überprüfe die Ausgabe, um sicherzustellen, dass nur die gewünschten Dateien gelöscht werden.
-- Teste das Skript zunächst mit einem höheren Wert für `Tage`, um die Auswirkungen zu prüfen.
-
----
 
 ## English
 
