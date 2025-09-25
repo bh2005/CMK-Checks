@@ -45,8 +45,8 @@ Signal Strength: RSSI (Received Signal Strength Indicator) for connected clients
 Example API Call:
 ```python
 ap_id = 12345  # Replace with actual AP ID
-performance = get_xiq_data(f"/devices/{ap_id}/performance", api_key)
-clients = get_xiq_data(f"/devices/{ap_id}/clients", api_key)
+performance = get_xiq_data(f"/devices/{id}/performance", api_key)
+clients = get_xiq_data(f"/devices/{id}/clients", api_key)
 
 print(f"CPU Usage: {performance['cpu_usage']}%")
 print(f"Memory Usage: {performance['memory_usage']}%")
