@@ -8,7 +8,7 @@ GET /devices: Retrieve a list of all devices, including APs.
 
 Filter by device_type to get only APs.
 
-Example: device_type=ACCESS_POINT.
+Example: device_type=AP.
 
 ### Metrics to Monitor:
 Status: Check if the AP is online or offline.
@@ -19,7 +19,7 @@ Last Seen: Timestamp of the last communication with the AP.
 
 Example API Call:
 ```python
-devices = get_xiq_data("/devices", api_key, params={"device_type": "ACCESS_POINT"})
+devices = get_xiq_data("/devices", api_key, params={"device_type": "AP"})
 for device in devices.get("data", []):
     print(f"AP Name: {device['name']}, Status: {device['status']}, Uptime: {device['system_up_time']}")
 ```
