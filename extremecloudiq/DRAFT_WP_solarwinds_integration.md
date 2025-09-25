@@ -18,7 +18,7 @@ NPM:
 - You need ExtremeCloud IQ credentials (username and password for the
   orchestrator node).
 
-- **Ensure that Extreme Networks\' API request limits** (up to 7500 API
+- **Ensure that Extreme Networks\' API request limits** (up to 7500 API/h
   requests per customer) are considered.
 
 **2. Integration in SolarWinds NPM:**
