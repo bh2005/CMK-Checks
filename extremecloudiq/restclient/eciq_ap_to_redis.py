@@ -117,6 +117,69 @@ def get_api_token(args):
     else:
         return load_api_token(args.api_key_file)
 
+# --- Neue Funktion: API-Rate-Limits prüfen ---
+def check_rate_limits(base_url: str, api_token: str) -> Optional[Dict[str, Any]]:
+    """
+    Fragt die aktuellen API-Rate-Limits über einen beliebigen Endpunkt ab.
+    Gibt ein Dict mit Limit-Informationen zurück.
+    """
+    url = f"{base_url}/devices?page=1&limit=1"
+    headers = {"Authorization": f"Bearer {api_token}"}
+    try:
+        log.info("Prüfe API-Rate-Limits...")
+        response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            retry_after = response.headers.get("Retry-After", "unbekannt")
+            log.warning(f"Rate-Limit überschritten! Warte {retry_after} Sekunden.")
+            print(f"Rate-Limit überschritten! Warte {retry_after} Sekunden.")
+            return {
+                "status": "exceeded",
+                "retry_after": retry_after
+            }
+        response.raise_for_status()
+        limit = response.headers.get("RateLimit-Limit")
+        remaining = response.headers.get("RateLimit-Remaining")
+        reset = response.headers.get("RateLimit-Reset")
+        log.info(f"Rate-Limits: Limit={limit}, Remaining={remaining}, Reset in {reset}s")
+        print(f"Rate-Limits: Limit={limit}, Remaining={remaining}, Reset in {reset}s")
+        return {
+            "status": "ok",
+            "limit": limit,
+            "remaining": remaining,
+            "reset": reset
+        }
+    except requests.exceptions.RequestException as e:
+        log.error(f"Fehler beim Abfragen der Rate-Limits: {e}")
+        return None
+
+# --- Hilfsfunktion für API-GET mit Rate-Limit-Handling ---
+def api_get_with_rate_limit(url: str, headers: dict, params: dict = None) -> Optional[requests.Response]:
+    """
+    Führt einen GET-Request aus und behandelt Rate-Limits (429).
+    Gibt die Response zurück oder None bei Fehler.
+    """
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", 60))
+            log.warning(f"429 Too Many Requests – Warte {retry_after} Sekunden...")
+            time.sleep(retry_after)
+            # Einmaliger Retry
+            response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        # Logge Rate-Limits
+        limit = response.headers.get("RateLimit-Limit")
+        remaining = response.headers.get("RateLimit-Remaining")
+        reset = response.headers.get("RateLimit-Reset")
+        if limit and remaining:
+            log.debug(f"Rate-Limit: {remaining}/{limit}, Reset in {reset}s")
+        return response
+    except requests.exceptions.RequestException as e:
+        log.error(f"API-Fehler bei {url}: {e}")
+        if hasattr(e, "response") and e.response is not None:
+            log.error(f"Status: {e.response.status_code}, Body: {e.response.text}")
+        return None
+
 def get_device_list_paginated(base_url: str, api_token: str) -> Optional[List[Dict[str, Any]]]:
     """
     Ruft die Liste der Geräte von der ExtremeCloud IQ API paginiert mit der Ansicht 'FULL' ab
@@ -124,73 +187,46 @@ def get_device_list_paginated(base_url: str, api_token: str) -> Optional[List[Di
     """
     page = 1
     all_devices = []
+    headers = {"Authorization": f"Bearer {api_token}"}
     while True:
-        url = f"{base_url}/devices?page={page}&limit={PAGE_SIZE}&views=FULL"
-        headers = {"Authorization": f"Bearer {api_token}"}
+        url = f"{base_url}/devices"
+        params = {"page": page, "limit": PAGE_SIZE, "views": "FULL"}
         log.info(f"Fetching devices page {page} from URL: {url}")
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json().get('data', [])
-            log.debug(f"Raw API response for page {page}: {json.dumps(data[:2], indent=4)}")
-            if not data:
-                log.info("No more devices found.")
-                break
-            for raw_device in data:
-                if raw_device.get('device_function') == 'AP':
-                    device = process_device(raw_device)
-                    all_devices.append(device)
-            if len(data) < PAGE_SIZE:
-                log.info("Reached the last page of devices.")
-                break
-            page += 1
-            time.sleep(3)
-        except requests.exceptions.RequestException as e:
-            log.error(f"Error fetching devices page {page}: {e}")
-            print(f"Error fetching devices page {page}: {e}")
-            if isinstance(e, requests.exceptions.HTTPError) and response is not None:
-                if response.status_code == 401:
-                    log.warning("Zugriff verweigert (401). Wahrscheinlich ist der API-Token abgelaufen. Bitte loggen Sie sich erneut ein.")
-                    print("Zugriff verweigert (401). Wahrscheinlich ist der API-Token abgelaufen. Bitte loggen Sie sich erneut ein.")
-                else:
-                    log.error(f"HTTP-Fehler beim Abrufen der Geräteliste (Seite {page}, Code: {response.status_code}).")
-                    print(f"HTTP-Fehler beim Abrufen der Geräteliste (Seite {page}, Code: {response.status_code}).")
-            elif isinstance(e, requests.exceptions.ConnectionError):
-                log.error(f"Verbindungsfehler beim Zugriff auf die API (Seite {page}): {e}")
-                print(f"Verbindungsfehler beim Zugriff auf die API (Seite {page}): {e}")
-            else:
-                log.error(f"Unerwarteter Fehler beim Abrufen der Geräteliste (Seite {page}): {e}")
-                print(f"Unerwarteter Fehler beim Abrufen der Geräteliste (Seite {page}): {e}")
+        response = api_get_with_rate_limit(url, headers, params)
+        if not response:
             return None
-        except json.JSONDecodeError as e:
-            log.error(f"Error decoding JSON response for devices page {page}: {e}")
-            print(f"Error decoding JSON response for devices page {page}: {e}")
-            return None
-        except Exception as e:
-            log.error(f"Unexpected error during device list retrieval: {e}")
-            print(f"Unexpected error during device list retrieval: {e}")
-            return None
+        data = response.json().get('data', [])
+        log.debug(f"Raw API response for page {page}: {json.dumps(data[:2], indent=4)}")
+        if not data:
+            log.info("No more devices found.")
+            break
+        for raw_device in data:
+            if raw_device.get('device_function') == 'AP':
+                device = process_device(raw_device)
+                all_devices.append(device)
+        if len(data) < PAGE_SIZE:
+            log.info("Reached the last page of devices.")
+            break
+        page += 1
+        time.sleep(1)  # Höfliche Pause
     log.info(f"Successfully retrieved {len(all_devices)} APs.")
     return all_devices
 
 def get_device_by_id(base_url: str, api_token: str, device_id: str) -> Optional[Dict[str, Any]]:
     """Ruft die detaillierten Informationen für ein einzelnes Gerät anhand seiner ID ab."""
-    url = f"{base_url}/devices/{device_id}?views=FULL"
+    url = f"{base_url}/devices/{device_id}"
+    params = {"views": "FULL"}
     headers = {"Authorization": f"Bearer {api_token}"}
     log.info(f"Fetching details for device ID '{device_id}'...")
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        device_data = response.json()
-        if device_data:
-            return process_device(device_data)
-        else:
-            log.warning(f"Device with ID '{device_id}' not found or data is empty.")
-            print(f"Device with ID '{device_id}' not found or data is empty.")
-            return None
-    except requests.exceptions.RequestException as e:
-        log.error(f"Error fetching details for device ID '{device_id}': {e}")
-        print(f"Error fetching details for device ID '{device_id}': {e}")
+    response = api_get_with_rate_limit(url, headers, params)
+    if not response:
+        return None
+    device_data = response.json()
+    if device_data:
+        return process_device(device_data)
+    else:
+        log.warning(f"Device with ID '{device_id}' not found or data is empty.")
+        print(f"Device with ID '{device_id}' not found or data is empty.")
         return None
 
 def get_ssids_for_multiple_devices(base_url: str, api_token: str, device_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
@@ -198,64 +234,62 @@ def get_ssids_for_multiple_devices(base_url: str, api_token: str, device_ids: Li
     ssids_by_device = {}
     if not device_ids:
         return ssids_by_device
-    # Teile die Geräte-IDs in Batches von maximal 10 (basierend auf limit=10)
     batch_size = 10
+    headers = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {api_token}"
+    }
     for i in range(0, len(device_ids), batch_size):
         batch_ids = device_ids[i:i + batch_size]
         device_ids_str = ",".join(str(id) for id in batch_ids)
-        url = f"{base_url}/devices/radio-information?page=1&limit=10&deviceIds={device_ids_str}&includeDisabledRadio=false"
-        headers = {
-            "accept": "application/json",
-            "Authorization": f"Bearer {api_token}"
+        url = f"{base_url}/devices/radio-information"
+        params = {
+            "page": 1,
+            "limit": 10,
+            "deviceIds": device_ids_str,
+            "includeDisabledRadio": "false"
         }
-        try:
-            log.info(f"Fetching SSID information for devices {device_ids_str} from URL: {url}")
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json().get('data', [])
-            log.debug(f"Raw SSID response for devices {device_ids_str}: {json.dumps(data[:1], indent=4)}")
-            for device_data in data:
-                device_id = str(device_data.get('device_id'))
-                ssids = []
-                seen_ssids = set()  # Für die Entfernung von Duplikaten
-                for radio in device_data.get('radios', []):
-                    for wlan in radio.get('wlans', []):
-                        ssid_name = wlan.get('ssid', '')
-                        if ssid_name and ssid_name not in seen_ssids:
-                            ssids.append({
-                                'ssid': ssid_name,
-                                'ssid_status': wlan.get('ssid_status', ''),
-                                'ssid_security_type': wlan.get('ssid_security_type', ''),
-                                'bssid': wlan.get('bssid', ''),
-                                'network_policy_name': wlan.get('network_policy_name', '')
-                            })
-                            seen_ssids.add(ssid_name)
-                ssids_by_device[device_id] = ssids
-            time.sleep(1)  # Kurze Pause zwischen Batches, um API-Rate-Limits zu vermeiden
-        except requests.exceptions.RequestException as e:
-            log.error(f"Fehler beim Abrufen der SSIDs für Geräte {device_ids_str}: {e}")
-        except Exception as e:
-            log.error(f"Unerwarteter Fehler beim Abrufen der SSIDs für Geräte {device_ids_str}: {e}")
+        log.info(f"Fetching SSID information for devices {device_ids_str}...")
+        response = api_get_with_rate_limit(url, headers, params)
+        if not response:
+            continue
+        data = response.json().get('data', [])
+        log.debug(f"Raw SSID response for devices {device_ids_str}: {json.dumps(data[:1], indent=4)}")
+        for device_data in data:
+            device_id = str(device_data.get('device_id'))
+            ssids = []
+            seen_ssids = set()
+            for radio in device_data.get('radios', []):
+                for wlan in radio.get('wlans', []):
+                    ssid_name = wlan.get('ssid', '')
+                    if ssid_name and ssid_name not in seen_ssids:
+                        ssids.append({
+                            'ssid': ssid_name,
+                            'ssid_status': wlan.get('ssid_status', ''),
+                            'ssid_security_type': wlan.get('ssid_security_type', ''),
+                            'bssid': wlan.get('bssid', ''),
+                            'network_policy_name': wlan.get('network_policy_name', '')
+                        })
+                        seen_ssids.add(ssid_name)
+            ssids_by_device[device_id] = ssids
+        time.sleep(1)
     return ssids_by_device
 
 def store_ap_data_in_redis(ap_list: List[Dict[str, Any]], api_token: str):
     """Speichert AP-Daten als Redis-Hash in DB 3 mit id als Schlüssel."""
     try:
         r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_AP_DB, decode_responses=True)
-        # Sammle alle Geräte-IDs
         device_ids = [str(ap.get('id', '')) for ap in ap_list if ap.get('id')]
         if not device_ids:
             log.warning("Keine Geräte-IDs gefunden. Keine Daten werden in Redis gespeichert.")
             return
-        # Hole SSID-Daten für alle Geräte in Batches
         ssids_by_device = get_ssids_for_multiple_devices(XIQ_BASE_URL, api_token, device_ids)
-        # Speichere die kombinierten Daten in Redis
         for ap in ap_list:
             device_id = str(ap.get("id", ""))
             if not device_id:
                 log.warning(f"AP ohne ID übersprungen: {ap.get('hostname')}")
                 continue
-            key = f"ap:{device_id}"  # Verwende id als Schlüssel
+            key = f"ap:{device_id}"
             ap_data = {
                 'hostname': ap.get('hostname', 'N/A'),
                 'ip_address': ap.get('ip_address', 'N/A'),
@@ -281,20 +315,18 @@ def export_redis_to_file(csv_file: Optional[str] = None, json_file: Optional[str
             ap_data = r.hgetall(key)
             if ap_data:
                 ap_data['ssids'] = json.loads(ap_data.get('ssids', '[]'))
-                # Kompatibilität mit älteren Daten (location statt locations)
                 if 'locations' in ap_data:
                     ap_data['locations'] = json.loads(ap_data.get('locations', '[]'))
                 elif 'location' in ap_data:
                     ap_data['locations'] = [{'name': ap_data.get('location', 'N/A')}] if ap_data.get('location') else []
-                ap_data['id'] = key.split(":")[1]  # Extrahiere ID aus dem Schlüssel (ap:<id>)
+                ap_data['id'] = key.split(":")[1]
                 ap_data_list.append(ap_data)
-
+        
         if not ap_data_list:
             log.warning("Keine AP-Daten in Redis DB 3 gefunden.")
             print("Keine AP-Daten in Redis DB 3 gefunden.")
             return
 
-        # Export nach CSV
         if csv_file:
             try:
                 with open(csv_file, 'w', newline='') as f:
@@ -303,7 +335,6 @@ def export_redis_to_file(csv_file: Optional[str] = None, json_file: Optional[str
                     writer.writeheader()
                     for ap in ap_data_list:
                         locations = ap.get('locations', [])
-                        # Zuordnung der Location-Ebenen basierend auf der Hierarchie
                         site = locations[0].get('name', '') if len(locations) > 0 else ''
                         region = locations[1].get('name', '') if len(locations) > 1 else ''
                         country = locations[2].get('name', '') if len(locations) > 2 else ''
@@ -330,7 +361,6 @@ def export_redis_to_file(csv_file: Optional[str] = None, json_file: Optional[str
                 log.error(f"Fehler beim Exportieren der AP-Daten in CSV-Datei '{csv_file}': {e}")
                 print(f"Fehler beim Exportieren der AP-Daten in CSV-Datei '{csv_file}': {e}")
 
-        # Export nach JSON
         if json_file:
             try:
                 with open(json_file, 'w') as f:
@@ -356,12 +386,11 @@ def get_device_from_redis_by_hostname(hostname: str) -> Optional[Dict[str, Any]]
             ap_data = r.hgetall(key)
             if ap_data.get('hostname') == hostname:
                 ap_data['ssids'] = json.loads(ap_data.get('ssids', '[]'))
-                # Kompatibilität mit älteren Daten
                 if 'locations' in ap_data:
                     ap_data['locations'] = json.loads(ap_data.get('locations', '[]'))
                 elif 'location' in ap_data:
                     ap_data['locations'] = [{'name': ap_data.get('location', 'N/A')}] if ap_data.get('location') else []
-                ap_data['id'] = key.split(":")[1]  # Extrahiere ID aus dem Schlüssel
+                ap_data['id'] = key.split(":")[1]
                 return ap_data
         return None
     except redis.exceptions.ConnectionError as e:
@@ -392,19 +421,17 @@ def find_hosts(
             if not device:
                 continue
             device['ssids'] = json.loads(device.get('ssids', '[]'))
-            # Kompatibilität mit älteren Daten
             if 'locations' in device:
                 device['locations'] = json.loads(device.get('locations', '[]'))
             elif 'location' in device:
                 device['locations'] = [{'name': device.get('location', 'N/A')}] if device.get('location') else []
-            device['id'] = key.split(":")[1]  # Extrahiere ID aus dem Schlüssel
+            device['id'] = key.split(":")[1]
             match = True
             if managed_by and managed_by.lower() not in device.get('managed_by', '').lower():
                 match = False
             if hostname_filter and hostname_filter.lower() not in device.get('hostname', '').lower():
                 match = False
             if location_part:
-                # Suche in allen Location-Namen
                 location_match = any(
                     location_part.lower() in loc.get('name', '').lower()
                     for loc in device.get('locations', [])
@@ -424,30 +451,28 @@ def find_hosts(
 def get_device_status_summary(location_id):
     """Ruft die Gerätestatusübersicht für eine Location-ID ab."""
     headers = {"Authorization": f"Bearer {API_SECRET}"}
-    try:
-        response = requests.get(f"{XIQ_BASE_URL}/locations/{location_id}/device_status_summary", headers=headers)
-        response.raise_for_status()
+    url = f"{XIQ_BASE_URL}/locations/{location_id}/device_status_summary"
+    response = api_get_with_rate_limit(url, headers)
+    if response:
         print(json.dumps(response.json(), indent=4))
-    except requests.exceptions.RequestException as e:
-        log.error(f"Error retrieving device status summary for location ID {location_id}: {e}")
-        print(f"Error retrieving device status summary for location ID {location_id}: {e}")
+    else:
+        log.error(f"Error retrieving device status summary for location ID {location_id}")
+        print(f"Error retrieving device status summary for location ID {location_id}")
 
 def get_locations_tree():
     """Ruft den Location Tree ab und speichert ihn in Redis (db=1)."""
     headers = {"Authorization": f"Bearer {API_SECRET}"}
     url = f"{XIQ_BASE_URL}/locations/tree"
-    try:
-        log.info(f"Rufe Location Tree ab: {url}")
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
+    response = api_get_with_rate_limit(url, headers)
+    if response:
         locations_tree = response.json()
         print(json.dumps(locations_tree, indent=4))
         r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_LOCATIONS_DB, decode_responses=True)
         r.set("xiq:locations:tree", json.dumps(locations_tree))
         log.info("Location Tree erfolgreich in Redis (db=1) gespeichert.")
-    except requests.exceptions.RequestException as e:
-        log.error(f"Fehler beim Abrufen des Location Tree: {e}")
-        print(f"Fehler beim Abrufen des Location Tree: {e}")
+    else:
+        log.error("Fehler beim Abrufen des Location Tree.")
+        print("Fehler beim Abrufen des Location Tree.")
 
 def get_location_info_by_name(search_name: str) -> Optional[Dict[str, Any]]:
     """Sucht nach einer Location im Location Tree (Redis db=1)."""
@@ -688,6 +713,20 @@ def handle_export_redis(args):
     """Exportiert AP-Daten aus Redis DB 3 in CSV- und/oder JSON-Dateien."""
     export_redis_to_file(args.export_db_csv, args.export_db_json)
 
+# --- Neue Handler-Funktion für Rate-Limits ---
+def handle_check_rate_limits(args, api_token):
+    """Prüft und zeigt die aktuellen API-Rate-Limits an."""
+    if not api_token:
+        log.error("Kein API-Token vorhanden.")
+        sys.exit(1)
+    result = check_rate_limits(args.server, api_token)
+    if result and result.get("status") == "ok":
+        print(json.dumps(result, indent=2))
+    elif result and result.get("status") == "exceeded":
+        print(json.dumps(result, indent=2))
+    else:
+        print("Fehler beim Abfragen der Rate-Limits.")
+
 def main():
     parser = ArgumentParser(description="Interagiert mit der ExtremeCloud IQ API für AP-Daten.")
     auth_group = parser.add_argument_group('Authentifizierung')
@@ -704,6 +743,7 @@ def main():
     api_group.add_argument("--get-device-status", dest="location_id", help="Ruft Gerätestatusübersicht für eine Location-ID ab.")
     api_group.add_argument("--get-locations-tree", action="store_true", help="Ruft den Location Tree ab.")
     api_group.add_argument("--find-location", dest="search_location", help="Sucht nach einer Location im Location Tree.")
+    api_group.add_argument("--check-rate-limits", action="store_true", help="Zeigt die aktuellen API-Rate-Limits an.")
 
     redis_group = parser.add_argument_group('Redis-Interaktion')
     redis_group.add_argument("--get-device-by-hostname", dest="hostname", help="Ruft AP-Details aus Redis basierend auf Hostname.")
@@ -739,7 +779,7 @@ def main():
         parser.error("--create-env erfordert -u und -p.")
 
     api_token = get_api_token(args)
-    if not api_token and any([args.get_aps, args.device_id, args.hostname_details, args.location_id, args.get_locations_tree]):
+    if not api_token and any([args.get_aps, args.device_id, args.hostname_details, args.location_id, args.get_locations_tree, args.check_rate_limits]):
         log.error("Ungültiger API-Token. Skript wird beendet.")
         sys.exit(1)
 
@@ -753,6 +793,7 @@ def main():
         args.search_location: lambda: handle_find_location(args),
         args.hostname_details: lambda: handle_get_device_details_by_hostname(args, api_token),
         bool(args.export_db_csv or args.export_db_json): lambda: handle_export_redis(args),
+        args.check_rate_limits: lambda: handle_check_rate_limits(args, api_token),
     }
 
     executed = False
