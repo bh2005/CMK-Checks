@@ -159,11 +159,11 @@ def parse_and_print_routes(raw_output: str, hostname: str, all_routes_data: list
     pattern = re.compile(
         # Code (S oder *) und optional der VRF-Name
         r"^(?P<code>[S\*] ?)"
-        r"(?:(?P<vrf>\S+) )?"               # VRF-Name (z.B. "myvrf" oder "global")
-        r"(?P<network>\d+\.\d+\.\d+\.\d+/\d+|\S+)"   # Netzwerk/Prefix
-        r"(?: is directly connected)?(?:,)?\s*"   # Optionaler Text für direkt verbundene Netze
+        r"(?:(?P<vrf>\S+) )?"                       # VRF-Name (z.B. "myvrf" oder "global")
+        r"(?P<network>\d+\.\d+\.\d+\.\d+/\d+|\S+)"  # Netzwerk/Prefix
+        r"(?: is directly connected)?(?:,)?\s*"     # Optionaler Text für direkt verbundene Netze
         r"(?: \[?(?P<ad>\d+)/(?P<metric>\d+)\]? )?" # AD/Metric
-        r"(?:via (?P<nexthop>\S+))?"        # Optionaler Next-Hop
+        r"(?:via (?P<nexthop>\S+))?"                # Optionaler Next-Hop
         r"(?:, (?P<interface>\S+))?"
         r"(?:, \S+)?$"
     )
