@@ -1,0 +1,106 @@
+cd ~/ansible/cisco/playbooks
+cp get_static_routes.yml get_static_routes.yml.bak        # alte sichern
+cat > get_static_routes.yml << 'EOF'
+---
+- name: Cisco Statische Routen auslesen → zentrales CSV (100% surrogate-sicher)
+  hosts: cisco_routers
+  gather_facts: no
+
+  vars:
+    ansible_command_timeout: 45
+    ansible_netcli_encoding: latin1
+    ansible_netcli_errors: surrogateescape
+
+    output_dir: "../output"
+    timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    csv_file: "{{ output_dir }}/static_routes_all_routers_{{ timestamp }}.csv"
+
+  tasks:
+
+    - name: Output-Ordner anlegen
+      ansible.builtin.file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Terminal für saubere Ausgabe vorbereiten
+      ansible.netcommon.cli_config:
+        config:
+          - terminal length 0
+          - terminal width 512
+      changed_when: false
+      ignore_errors: true
+
+    - name: Statische Routen abfragen (IOS / IOS-XE)
+      ansible.netcommon.cli_command:
+        command: "{{ item }}"
+      loop:
+        - "show ip route static | include ^S"
+        - "show ip route vrf * static"
+      register: raw_routes
+      when: ansible_network_os is defined and ansible_network_os in ['ios', 'cisco.ios.ios']
+
+    - name: Statische Routen abfragen (NX-OS)
+      ansible.netcommon.cli_command:
+        command: "show ip route static vrf all"
+      register: raw_routes_nxos
+      when: ansible_network_os is defined and ansible_network_os == 'cisco.nxos.nxos'
+
+    - name: Rohdaten zusammenführen
+      set_fact:
+        all_lines: >-
+          {% if raw_routes is defined %}
+            {{ raw_routes.results | map(attribute='stdout_lines') | flatten | list }}
+          {% elif raw_routes_nxos is defined %}
+            {{ raw_routes_nxos.stdout_lines }}
+          {% else %}
+            []
+          {% endif %}
+
+    - name: Routen parsen und strukturieren
+      set_fact:
+        parsed_routes: "{{ parsed_routes | default([]) + [route] }}"
+      loop: "{{ all_lines }}"
+      vars:
+        line: "{{ item }}"
+        route: >-
+          {% set m = line | regex_findall('^([S*]\\s*\\*?\\s*)(?:VRF\\s+(\\S+)\\s+)?(\\S+)(?:.*via\\s+([\\d.]+|\\S+?))?(?:,\\s+(\\S+))?', ignorecase=True) %}
+          {% if m %}
+            {{
+              {
+                'host': inventory_hostname,
+                'timestamp': ansible_date_time.iso8601,
+                'code': (m[0][0] | default('')) | trim,
+                'vrf': (m[0][1] | default('global')) | trim,
+                'prefix': m[0][2] | trim,
+                'nexthop': (m[0][3] | default('')) | trim,
+                'interface': (m[0][4] | default('')) | trim
+              }
+            }}
+          {% endif %}
+      when: item is defined and item | regex_search('^[S*]')
+
+    - name: Alle Routen dieses Hosts nach localhost sammeln
+      ansible.builtin.set_fact:
+        all_global_routes: "{{ all_global_routes | default([]) + parsed_routes | default([]) }}"
+      delegate_to: localhost
+
+    - name: CSV-Datei mit allen Routen aller Router schreiben
+      ansible.builtin.copy:
+        content: |
+          Hostname,Timestamp,Code,VRF,Prefix,Next-Hop,Interface
+          {% for r in all_global_routes | default([]) %}
+          "{{ r.host }}","{{ r.timestamp }}","{{ r.code }}","{{ r.vrf }}","{{ r.prefix }}","{{ r.nexthop }}","{{ r.interface }}"
+          {% endfor %}
+        dest: "{{ csv_file }}"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Fertig-Meldung
+      debug:
+        msg: "Statische Routen von {{ all_global_routes | length }} Einträgen → {{ csv_file }}"
+      run_once: true
+EOF
