@@ -1,7 +1,7 @@
 So nutzt du es
 1. Als eigenständiges Binary (empfohlen)
 
-...
+```
 # Cargo-Projekt anlegen
 cargo new eciq_ap_to_redis --bin
 cd eciq_ap_to_redis
@@ -30,11 +30,11 @@ EOF
 # Dann bauen & ausführen:
 cargo build --release
 ./target/release/eciq_ap_to_redis
-...
+```
 
 2. Oder als One-Liner mit cargo script (schnell testen)
 Bash
-...
+```
 cargo install rustscript
 rustscript eciq_ap_to_redis.rs --release
-...
+```
