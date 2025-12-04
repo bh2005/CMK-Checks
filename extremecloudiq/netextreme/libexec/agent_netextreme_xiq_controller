@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+#-*- encoding: utf-8
+#
+# Author : Alexander Vogel (alexander.vogel.2305@gmail.com)
+# Date   : 2025-11-28
+# License: GNU General Public License v2
+#
+# Libexec: ExtremeCloud IQ Controller
+
+
+import argparse
+import json
+import requests
+import sys
+import urllib3
+
+from typing import Dict, Any, List, Optional
+
+urllib3.disable_warnings()
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(description=__doc__)
+    
+    parser.add_argument("--server", type=str, required=True)
+    parser.add_argument("--port", type=int, default=5825)
+    parser.add_argument("--username", type=str, required=True)
+    parser.add_argument("--password", type=str, required=True)
+    parser.add_argument("--sections", type=str, required=False, default="all")
+
+    args = parser.parse_args(argv)
+    
+    return args
+
+ 
+class ExtremeXiqControllerAgent():
+    def __init__(self, server: str, port: int, username: str, password: str) -> None:
+        
+        self.server = server
+        self.port = port
+        self.username = username
+        self.password = password
+        
+        self.url = f"https://{args.server}:{args.port}"
+        self.token = ""
+        
+        # try to get access token
+        self.token = self._authenticate()
+
+    def _authenticate(self):
+
+        payload = {
+            "grantType": "password",
+            "userId": self.username,
+            "password": self.password
+        }
+        
+        resp = self._request("POST", f"/management/v1/oauth2/token", data=payload)
+        
+        try:
+            return resp.get("access_token")
+        except:
+            raise Exception(f"API-Error {resp.status_code}: {resp.text}")
+
+    def _request(self, method: str, endpoint, headers=None, data={}):
+
+        api_url = self.url + endpoint
+        
+        if not headers:
+            headers = {
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {self.token}',
+                'Content-Type': 'application/json'
+            }
+
+        resp = requests.request(method, api_url, headers=headers, data=json.dumps(data), verify=False)
+
+        if not resp.ok:
+            raise RuntimeError(f"API-Error {resp.status_code}: {resp.text}")
+
+        return resp.json()
+
+    def get_all_services(self):
+        return self._request("GET", f"/management/v1/services")
+        
+    def get_current_stations_of_service(self, serviceId: str):
+        return self._request("GET", f"/management/v1/services/{serviceId}/stations")
+        
+    def get_interface_stats(self):
+        return self._request("GET", f"/platformmanager/v1/report/l2ports")
+        
+    def get_license_information(self):
+        return self._request("GET", f"/platformmanager/v1/license")
+        
+    def get_containers(self):
+        return self._request("GET", f"/orchestration/v1/containers")
+        
+    def get_container_stats(self, idOrName: str):
+        return self._request("GET", f"/orchestration/v1/containers/{idOrName}/stats")
+
+    def get_all_stations(self):
+        return self._request("GET", f"/management/v2/stations/query")
+
+    def get_sites(self):
+        return self._request("GET", f"/management/v3/sites")
+        
+    def get_current_stations_of_site(self, siteId: str):
+        return self._request("GET", f"/management/v3/sites/{siteId}/stations")
+        
+    def get_access_points(self):
+        return self._request("GET", f"/management/v1/aps/query")
+        
+    def get_access_point_state(self):
+        return self._request("GET", f"/management/v1/state/aps")
+
+
+if __name__ == "__main__":
+
+    args = parse_arguments(sys.argv[1:])
+    
+    # init api
+    agent_netextreme_xiq_controller = ExtremeXiqControllerAgent(
+        server = args.server,
+        port = args.port,
+        username = args.username,
+        password = args.password
+    )
+
+    # access points
+    if 'ap' in args.sections or 'all' in args.sections:
+        access_points = agent_netextreme_xiq_controller.get_access_points()
+        states = agent_netextreme_xiq_controller.get_access_point_state()
+        
+        if len(access_points) > 0:
+            sys.stdout.write(f"<<<netextreme_xiq_controller_ap:sep(0)>>>\n")
+        for ap in access_points:
+            parsed = {
+                'name': ap['apName'],
+                'power': ap['pwrUsage'],
+                'uptime': ap['sysUptime'],
+            }
+            
+            for r in ap['radios']:
+                #parsed[f"radio{r['radioIndex']}_txPower"] = r['txPower']
+                parsed[f"radio{r['radioIndex']}_clients"] = r['clients']
+                #parsed[f"radio{r['radioIndex']}_noise"] = r['noise']
+                #parsed[f"radio{r['radioIndex']}_channelUtilization"] = r['channelUtilization']
+                
+                #parsed[f"radio{r['radioIndex']}_channelUtilization"] = r['channelUtilization']
+            
+            clients = 0
+            for r in ap['radios']:
+                clients += r['clients']
+                
+            parsed['clients'] = clients
+            
+            # state
+            for state in states:
+                if state['apSerialNo'] == ap['serialNumber']:   
+                    parsed['status'] = state['entityStatus']['operationalStatus']
+
+            sys.stdout.write(f"{parsed}\n")
+
+    # determine all clients when WLAN or site data is required. This data can then be used to determine the number of 
+    # clients per WLAN or site. This is faster than querying each site or WLAN for clients via individual API requests.
+    if 'site' in args.sections or 'wlan' in args.sections or 'all' in args.sections:
+        stations = agent_netextreme_xiq_controller.get_all_stations()
+
+    # sites
+    if 'site' in args.sections or 'all' in args.sections:
+        sites = agent_netextreme_xiq_controller.get_sites()
+        
+        if len(sites) > 0:
+            sys.stdout.write("<<<netextreme_xiq_controller_site:sep(0)>>>\n")
+
+            for s in sites:
+                
+                # count stations there are connected with this ssid, get the packtes from all clients
+                inBytes_clients = 0
+                outBytes_clients = 0
+                #stations = agent_netextreme_xiq_controller.get_current_stations_of_site(s['id']) # connected clients with this service
+                
+                # determine clients
+                clients = 0
+                for st in stations:
+                    if st['siteName'] == s['siteName']:
+                        clients +=1
+                        
+                #for st in stations:
+                #    inBytes_clients += st['inBytes']
+                #    outBytes_clients += st['outBytes']
+                    
+                site = {
+                    'name': s['siteName'],
+                    'clients': clients,
+                }
+
+                sys.stdout.write(f"{site}\n")
+
+    # WLANs
+    if 'wlan' in args.sections or 'all' in args.sections:
+        wlans = agent_netextreme_xiq_controller.get_all_services()
+
+        if len(wlans) > 0:
+            sys.stdout.write("<<<netextreme_xiq_controller_wlan:sep(0)>>>\n")
+        
+            for wlan in wlans:
+
+                # count stations there are connected with this ssid, get the packtes from all clients
+                #stations = agent_netextreme_xiq_controller.get_current_stations_of_service(wlan['id']) # connected clients with this service
+                #for st in stations:
+                #    inBytes_clients += st['inBytes']
+                #    outBytes_clients += st['outBytes']
+                    
+                # determine clients
+                clients = 0
+                for st in stations:
+                    if st['serviceName'] == wlan['serviceName']:
+                        clients +=1    
+                    
+                w = {
+                    'serviceName': wlan['serviceName'],
+                    'status': wlan['status'],
+                    'ssid': wlan['ssid'],
+                    'clients': clients,
+                }
+
+                sys.stdout.write(f"{w}\n")
