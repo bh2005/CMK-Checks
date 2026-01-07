@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+import json
+
+# Parameter aus Check_MK Notification Rule
+params = {
+    "url": os.environ.get("NOTIFY_PARAMETER_URL"),
+    "token": os.environ.get("NOTIFY_PARAMETER_TOKEN"),
+    "username": os.environ.get("NOTIFY_PARAMETER_USERNAME"),
+    "password": os.environ.get("NOTIFY_PARAMETER_PASSWORD"),
+    "auth_method": os.environ.get("NOTIFY_PARAMETER_AUTH_METHOD", "token"),
+    "message_type": os.environ.get("NOTIFY_PARAMETER_MESSAGE_TYPE", "sms"),
+    "text": os.environ.get("NOTIFY_PARAMETER_TEXT", ""),
+    "wave_id": os.environ.get("NOTIFY_PARAMETER_WAVE_ID"),
+    "modem_no": os.environ.get("NOTIFY_PARAMETER_MODEM_NO", "2"),
+    "disable_ssl": os.environ.get("NOTIFY_PARAMETER_DISABLE_SSL") == "True",
+    "proxy": os.environ.get("NOTIFY_PARAMETER_PROXY"),
+    "timeout": os.environ.get("NOTIFY_PARAMETER_TIMEOUT", "15"),
+}
+
+# Empfänger: Check_MK setzt NOTIFY_CONTACTPAGER (eine Nummer pro Kontakt)
+recipient = os.environ.get("NOTIFY_CONTACTPAGER")
+if not recipient:
+    sys.stderr.write("Kein Empfänger (NOTIFY_CONTACTPAGER leer)\n")
+    sys.exit(2)
+
+# Nachricht zusammenbauen (Platzhalter ersetzen)
+host = os.environ["NOTIFY_HOSTNAME"]
+what = os.environ["NOTIFY_WHAT"]  # HOST oder SERVICE
+state = os.environ["NOTIFY_SHORTSTATE"] if what == "HOST" else os.environ["NOTIFY_SERVICESHORTSTATE"]
+output = os.environ["NOTIFY_HOSTOUTPUT"] if what == "HOST" else os.environ["NOTIFY_SERVICEOUTPUT"]
+service = os.environ.get("NOTIFY_SERVICEDESC", "Host")
+
+message = params["text"].replace("$HOSTNAME$", host) \
+                        .replace("$SERVICEDESC$", service) \
+                        .replace("$STATE$", state) \
+                        .replace("$OUTPUT$", output)
+
+# CLI-Befehl für smseagle_api_v2.py aufbauen
+script_path = "/omd/sites/YOURSITE/local/share/check_mk/notifications/smseagle_api_v2.py"  # Pfad anpassen!
+
+cmd = ["python3", script_path, params["message_type"]]
+
+if recipient:
+    cmd += ["--to", recipient]
+
+cmd += ["--text", message]
+
+if params["message_type"] == "wave" and params["wave_id"]:
+    cmd += ["--wave-id", str(params["wave_id"])]
+elif params["message_type"] == "wave":
+    sys.stderr.write("wave_id fehlt für Typ wave\n")
+    sys.exit(2)
+
+cmd += ["--modem_no", str(params["modem_no"])]
+
+if params["disable_ssl"]:
+    cmd += ["--disable-ssl"]
+
+# Umgebung für Auth und URL (das Script liest ggf. aus config.json oder env – besser env setzen)
+os.environ["SMSEAGLE_URL"] = params["url"]
+if params["auth_method"] == "token":
+    os.environ["SMSEAGLE_TOKEN"] = params["token"]
+else:
+    os.environ["SMSEAGLE_USERNAME"] = params["username"] or ""
+    os.environ["SMSEAGLE_PASSWORD"] = params["password"] or ""
+
+if params["proxy"]:
+    os.environ["HTTP_PROXY"] = params["proxy"]
+    os.environ["HTTPS_PROXY"] = params["proxy"]
+
+try:
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=int(params["timeout"]))
+    sys.stdout.write(f"SMS-Erfolg: {result.stdout}\n")
+    sys.exit(0)
+except subprocess.CalledProcessError as e:
+    sys.stderr.write(f"SMSEagle Fehler: {e.stderr}\n")
+    sys.exit(2)
+except Exception as e:
+    sys.stderr.write(f"Unerwarteter Fehler: {str(e)}\n")
+    sys.exit(2)
