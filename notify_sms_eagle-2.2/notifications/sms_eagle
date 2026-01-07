@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+# SMS Eagle Appliance
+"""
+Sms Eagle
+"""
+# pylint: disable=too-many-locals, import-error, broad-exception-raised, bare-except
+import sys
+import requests
+import logging
+from cmk.notification_plugins import utils
+from cmk.notification_plugins.utils import get_password_from_env_or_context
+from urllib3.exceptions import InsecureRequestWarning
+from urllib3 import disable_warnings
+disable_warnings(InsecureRequestWarning)
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger('urllib3').setLevel(logging.DEBUG)
+
+class NotifyEagle():
+    """
+    Eagle Notification Class
+    """
+
+    def __init__(self):
+        """
+        Perpare Config and Params
+        """
+        context = utils.collect_context()
+        self.config = {
+            'api_host': context['PARAMETER_API_HOST'],
+            'api_token': get_password_from_env_or_context(key="PARAMETER_API_TOKEN", context=context),
+        }
+        self.context = context
+
+        if not self.context['CONTACTPAGER']:
+            sys.stdout.write("Cannot send SMS: empty destination pager address\n")
+            sys.exit(2)
+
+
+    def get_label(self, type, needle):
+        """
+        Search for given Service or Host Label
+        """
+        prefix = ""
+        if type == "host":
+            prefix = "HOSTLABEL_"
+        elif type == "service":
+            prefix = "SERVICELABEL_"
+
+        found = False
+        for key, value in self.context.items():
+            if key.startswith(f"{prefix}{needle}"):
+                found = value
+                break
+        if found:
+            return found
+        return False
+
+    def get_message(self):
+        """
+        Build SMS Text
+        """
+
+        messages = []
+        messages.append(self.context['HOSTNAME'])
+        service_label = False
+        host_label = False
+
+        if needed_host_label := self.context.get('PARAMETER_HOST_LABEL'):
+            host_label = self.get_label('host', needed_host_label)
+        if needed_service_label := self.context.get('PARAMETER_SVC_LABEL'):
+            service_label = self.get_label('service', needed_service_label)
+
+        if service_label:
+            messages.append(f"SL {needed_service_label}:{service_label}")
+        if host_label:
+            messages.append(f"HL {needed_host_label}:{host_label}")
+
+        if self.context['WHAT'] == 'HOST':
+            messages.append(self.context['HOSTSTATE'])
+            messages.append(self.context['HOSTOUTPUT'])
+        else:
+            messages.append(self.context['SERVICESTATE'])
+            messages.append(self.context['SERVICEDESC'])
+            messages.append(self.context['SERVICEOUTPUT'])
+
+        message = " ".join(messages)[:160]
+        return message 
+
+    def notify(self):
+        """
+        Main part
+        """
+        url = f"{self.config['api_host']}/api/v2/messages/sms_single"
+        payload = {
+            'to': self.context['CONTACTPAGER'],
+            'text': self.get_message(),
+
+        }
+        headers ={
+            'access-token': self.config['api_token'],
+            'Content-Type': 'application/json',
+        }
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code != 200:
+            print(response.text, response.url)
+            return 1
+        print(response.text)
+        return 0
+
+if __name__ == "__main__":
+    notify = NotifyEagle()
+    sys.exit(notify.notify())
