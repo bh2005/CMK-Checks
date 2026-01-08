@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Check_MK Notification Plugin for SMSEagle API v2
+
+Sends notifications via SMSEagle device (SMS, TTS calls, or Wave files).
+Supports failover to secondary SMSEagle device.
+
+Install to: local/share/check_mk/notifications/smseagle
+"""
+
+import sys
+import os
+import json
+import logging
+from typing import Dict, Any, Optional, Tuple
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+# Setup logging
+def setup_logging():
+    """Configure logging for the notification plugin"""
+    log_dir = os.path.join(os.environ.get('OMD_ROOT', '/tmp'), 'var/log')
+    log_file = os.path.join(log_dir, 'smseagle_notifications.log')
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
+
+
+def send_message(url: str, payload: Dict[str, Any], headers: Dict[str, str], 
+                 verify_ssl: bool = True) -> Tuple[bool, Optional[Dict]]:
+    """Send message to SMSEagle API"""
+    try:
+        data = json.dumps(payload).encode('utf-8')
+        req = Request(url, data=data, headers=headers, method='POST')
+        
+        logger.info(f"Sending request to {url}")
+        logger.debug(f"Payload: {payload}")
+        
+        # Note: urllib doesn't have verify parameter like requests
+        # For production, you should handle SSL properly
+        with urlopen(req, timeout=30) as response:
+            response_text = response.read().decode('utf-8')
+            response_data = json.loads(response_text)
+            
+            logger.info(f"API Response: {response_data}")
+            
+            # Check response format
+            if isinstance(response_data, dict) and response_data.get("status") == "queued":
+                logger.info(f"Message queued successfully. ID: {response_data.get('id')}")
+                return True, response_data
+            elif isinstance(response_data, dict):
+                logger.error(f"API error: {response_data.get('message', 'Unknown error')}")
+                return False, response_data
+            else:
+                logger.error(f"Unexpected response type: {type(response_data)}")
+                return False, None
+                
+    except HTTPError as e:
+        error_body = e.read().decode('utf-8') if hasattr(e, 'read') else str(e)
+        logger.error(f"HTTP Error {e.code}: {error_body}")
+        return False, None
+    except URLError as e:
+        logger.error(f"URL Error: {e.reason}")
+        return False, None
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON response: {e}")
+        return False, None
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return False, None
+
+
+def send_smseagle_notification(
+    message_type: str,
+    recipients: Dict[str, Any],
+    text: Optional[str] = None,
+    wave_id: Optional[int] = None,
+    primary_url: str = "",
+    primary_token: str = "",
+    secondary_url: Optional[str] = None,
+    secondary_token: Optional[str] = None,
+    modem_no: int = 2,
+    verify_ssl: bool = True
+) -> bool:
+    """
+    Send notification via SMSEagle with failover support
+    
+    Args:
+        message_type: 'sms', 'call_tts', or 'wave'
+        recipients: Dict with 'to', 'contacts', and/or 'groups'
+        text: Message text (required for sms and call_tts)
+        wave_id: Wave file ID (required for wave)
+        primary_url: Primary SMSEagle base URL
+        primary_token: Primary access token
+        secondary_url: Secondary SMSEagle base URL (optional)
+        secondary_token: Secondary access token (optional)
+        modem_no: Modem number to use
+        verify_ssl: Whether to verify SSL certificates
+    """
+    
+    # Build API endpoint
+    endpoints = {
+        "sms": "/api/v2/messages/sms",
+        "call_tts": "/api/v2/calls/tts_advanced",
+        "wave": "/api/v2/calls/wave"
+    }
+    
+    if message_type not in endpoints:
+        logger.error(f"Invalid message type: {message_type}")
+        return False
+    
+    endpoint = endpoints[message_type]
+    
+    # Build payload
+    payload = {
+        "modem_no": modem_no,
+        **recipients
+    }
+    
+    if message_type == "sms":
+        payload["text"] = text
+    elif message_type == "call_tts":
+        payload["text"] = text
+        payload["voice_id"] = 3
+    elif message_type == "wave":
+        payload["wave_id"] = wave_id
+    
+    # Try primary server
+    url = f"{primary_url.rstrip('/')}{endpoint}"
+    headers = {
+        'Content-Type': 'application/json',
+        'access-token': primary_token
+    }
+    
+    logger.info(f"Attempting to send {message_type} via primary server...")
+    success, data = send_message(url, payload, headers, verify_ssl)
+    
+    # Try secondary server on failure
+    if not success and secondary_url and secondary_token:
+        logger.info("Primary server failed. Trying secondary server...")
+        url = f"{secondary_url.rstrip('/')}{endpoint}"
+        headers = {
+            'Content-Type': 'application/json',
+            'access-token': secondary_token
+        }
+        success, data = send_message(url, payload, headers, verify_ssl)
+    
+    return success
+
+
+def main():
+    """Main notification handler for Check_MK"""
+    
+    # Get context from Check_MK environment variables
+    context = {key: value for key, value in os.environ.items() if key.startswith('NOTIFY_')}
+    
+    logger.info("=" * 80)
+    logger.info("SMSEagle Notification Plugin called")
+    logger.info(f"Host: {context.get('NOTIFY_HOSTNAME', 'N/A')}")
+    logger.info(f"Service: {context.get('NOTIFY_SERVICEDESC', 'Host Check')}")
+    logger.info(f"State: {context.get('NOTIFY_SERVICESHORTSTATE', context.get('NOTIFY_HOSTSHORTSTATE', 'N/A'))}")
+    
+    # Get plugin parameters from environment
+    # These are set by the WATO rule configuration
+    message_type = os.environ.get('NOTIFY_PARAMETER_MESSAGE_TYPE', 'sms')
+    
+    # Server configuration
+    primary_url = os.environ.get('NOTIFY_PARAMETER_PRIMARY_URL', '')
+    primary_token = os.environ.get('NOTIFY_PARAMETER_PRIMARY_TOKEN', '')
+    secondary_url = os.environ.get('NOTIFY_PARAMETER_SECONDARY_URL')
+    secondary_token = os.environ.get('NOTIFY_PARAMETER_SECONDARY_TOKEN')
+    
+    # Message configuration
+    modem_no = int(os.environ.get('NOTIFY_PARAMETER_MODEM_NO', '2'))
+    wave_id = os.environ.get('NOTIFY_PARAMETER_WAVE_ID')
+    verify_ssl = os.environ.get('NOTIFY_PARAMETER_VERIFY_SSL', 'true').lower() == 'true'
+    
+    # Custom message template or use default
+    message_template = os.environ.get('NOTIFY_PARAMETER_MESSAGE_TEMPLATE', '')
+    
+    # Validate required parameters
+    if not primary_url or not primary_token:
+        logger.error("Missing required parameters: PRIMARY_URL and PRIMARY_TOKEN")
+        sys.exit(2)
+    
+    # Get recipients from contact's pager address
+    # Check_MK sets NOTIFY_CONTACTPAGER to the contact's pager field
+    pager = os.environ.get('NOTIFY_CONTACTPAGER', '')
+    
+    if not pager:
+        logger.error("No recipient found in NOTIFY_CONTACTPAGER")
+        sys.exit(2)
+    
+    # Parse recipients
+    # Format can be: +491234567890 or contacts:12,15 or groups:1,2 or combination
+    recipients = {}
+    
+    for part in pager.split(';'):
+        part = part.strip()
+        if part.startswith('contacts:'):
+            contact_ids = [int(x.strip()) for x in part.replace('contacts:', '').split(',')]
+            recipients['contacts'] = contact_ids
+        elif part.startswith('groups:'):
+            group_ids = [int(x.strip()) for x in part.replace('groups:', '').split(',')]
+            recipients['groups'] = group_ids
+        elif part.startswith('+') or part.isdigit():
+            # Phone number
+            recipients.setdefault('to', []).append(part)
+    
+    if not recipients:
+        logger.error(f"Could not parse recipients from pager field: {pager}")
+        sys.exit(2)
+    
+    # Build message text
+    if message_template:
+        # Use custom template with variable substitution
+        text = message_template
+        for key, value in context.items():
+            placeholder = f"${key.replace('NOTIFY_', '')}$"
+            text = text.replace(placeholder, str(value))
+    else:
+        # Build default message
+        hostname = context.get('NOTIFY_HOSTNAME', 'Unknown')
+        what = context.get('NOTIFY_WHAT', 'HOST')
+        
+        if what == 'SERVICE':
+            service = context.get('NOTIFY_SERVICEDESC', 'Unknown Service')
+            state = context.get('NOTIFY_SERVICESHORTSTATE', 'UNKN')
+            output = context.get('NOTIFY_SERVICEOUTPUT', '')
+            text = f"[{state}] {hostname}/{service}: {output}"
+        else:
+            state = context.get('NOTIFY_HOSTSHORTSTATE', 'UNKN')
+            output = context.get('NOTIFY_HOSTOUTPUT', '')
+            text = f"[{state}] Host {hostname}: {output}"
+        
+        # Truncate if too long
+        if len(text) > 160:
+            text = text[:157] + "..."
+    
+    logger.info(f"Message type: {message_type}")
+    logger.info(f"Recipients: {recipients}")
+    logger.info(f"Message: {text[:100]}...")
+    
+    # Send notification
+    try:
+        success = send_smseagle_notification(
+            message_type=message_type,
+            recipients=recipients,
+            text=text,
+            wave_id=int(wave_id) if wave_id else None,
+            primary_url=primary_url,
+            primary_token=primary_token,
+            secondary_url=secondary_url,
+            secondary_token=secondary_token,
+            modem_no=modem_no,
+            verify_ssl=verify_ssl
+        )
+        
+        if success:
+            logger.info("Notification sent successfully")
+            sys.exit(0)
+        else:
+            logger.error("Failed to send notification")
+            sys.exit(2)
+            
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()
