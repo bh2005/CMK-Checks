@@ -1,34 +1,43 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Check_MK Universal Link Dashlet
+Check_MK 2.4 Compatible Link Dashlet
 
 Creates clickable links/buttons to other dashboards, external URLs, or views.
-Can be styled as button, card, or iframe.
 
-Install to: local/share/check_mk/web/plugins/dashboard/link_dashlet.py
+Install to: local/lib/check_mk/gui/plugins/dashboard/link_dashlet.py
+(Note the different path for CMK 2.4!)
 """
 
 from cmk.gui.i18n import _
-from cmk.gui.plugins.dashboard.utils import Dashlet, dashlet_registry
+from cmk.gui.type_defs import HTTPVariables
 from cmk.gui.htmllib.html import html
 from cmk.gui.utils.html import HTML
 from cmk.gui.valuespec import (
-    Alternative,
     CascadingDropdown,
     Dictionary,
     DropdownChoice,
-    FixedValue,
-    Integer,
     TextInput,
     TextAreaUnicode,
-    Tuple,
 )
+
+# Menu entry from helper library
+import cmk.gui.dashboard.page_show_dashboard
+from cmk.plugins.dashlets.other_dashlet_entries import my_dashboard_add_other_dashlet_entries
+cmk.gui.dashboard.page_show_dashboard._dashboard_add_other_dashlet_entries = my_dashboard_add_other_dashlet_entries
+
+try:
+    # Check_MK 2.4 API
+    from cmk.gui.dashboard.dashlet import Dashlet, dashlet_registry
+    from cmk.gui.dashboard.type_defs import DashletConfig, DashletId
+except ImportError:
+    # Fallback for older versions
+    from cmk.gui.plugins.dashboard.utils import Dashlet, dashlet_registry
 
 
 @dashlet_registry.register
 class LinkDashlet(Dashlet):
-    """Dashlet that displays a clickable link/button to another dashboard or URL"""
+    """Dashlet that displays a clickable link/button"""
 
     @classmethod
     def type_name(cls):
@@ -36,76 +45,56 @@ class LinkDashlet(Dashlet):
 
     @classmethod
     def title(cls):
-        return _("Link / Button Dashlet")
+        return _("Link / Button")
 
     @classmethod
     def description(cls):
-        return _("Display a clickable link or button to another dashboard, view, or external URL")
+        return _("Clickable link or button to dashboard, view, or URL")
 
     @classmethod
-    def sort_index(cls) -> int:
+    def sort_index(cls):
         return 10
 
     @classmethod
     def initial_size(cls):
-        return (20, 10)  # width, height in grid units
+        return (20, 10)
+
+    @classmethod
+    def is_resizable(cls):
+        return True
 
     @classmethod
     def initial_refresh_interval(cls):
-        return 0  # No refresh needed for static links
+        return False  # No refresh needed
 
     @classmethod
     def vs_parameters(cls):
-        """Configuration options for the dashlet"""
         return Dictionary(
             title=_("Properties"),
             render="form",
-            optional_keys=["icon", "background_color", "text_color", "description"],
+            optional_keys=["description", "icon"],
             elements=[
                 (
                     "link_type",
                     CascadingDropdown(
                         title=_("Link Type"),
-                        help=_("Choose what type of link to create"),
                         choices=[
                             (
                                 "dashboard",
-                                _("Internal Dashboard"),
-                                Dictionary(
-                                    elements=[
-                                        (
-                                            "dashboard_name",
-                                            TextInput(
-                                                title=_("Dashboard Name"),
-                                                help=_(
-                                                    "Name of the dashboard to link to. "
-                                                    "Example: main, problems, network_overview"
-                                                ),
-                                                size=40,
-                                            ),
-                                        ),
-                                    ],
-                                    optional_keys=[],
+                                _("Check_MK Dashboard"),
+                                TextInput(
+                                    title=_("Dashboard Name"),
+                                    help=_("Name of the dashboard (from URL: dashboard.py?name=XXX)"),
+                                    size=40,
                                 ),
                             ),
                             (
                                 "view",
-                                _("Internal View"),
-                                Dictionary(
-                                    elements=[
-                                        (
-                                            "view_name",
-                                            TextInput(
-                                                title=_("View Name"),
-                                                help=_(
-                                                    "Name of the view to link to. "
-                                                    "Example: allhosts, services, host"
-                                                ),
-                                                size=40,
-                                            ),
-                                        ),
-                                    ],
-                                    optional_keys=[],
+                                _("Check_MK View"),
+                                TextInput(
+                                    title=_("View Name"),
+                                    help=_("Name of the view (e.g., allhosts, allservices)"),
+                                    size=40,
                                 ),
                             ),
                             (
@@ -117,24 +106,19 @@ class LinkDashlet(Dashlet):
                                             "url",
                                             TextInput(
                                                 title=_("URL"),
-                                                help=_(
-                                                    "Full URL to link to. "
-                                                    "Example: https://monitoring.company.com/grafana"
-                                                ),
+                                                help=_("Full URL (must start with http:// or https://)"),
                                                 size=60,
-                                                regex="^https?://.*",
-                                                regex_error=_("URL must start with http:// or https://"),
                                             ),
                                         ),
                                         (
-                                            "open_in",
+                                            "open_new",
                                             DropdownChoice(
                                                 title=_("Open in"),
                                                 choices=[
-                                                    ("same", _("Same window")),
-                                                    ("new", _("New window/tab")),
+                                                    (False, _("Same window")),
+                                                    (True, _("New window/tab")),
                                                 ],
-                                                default_value="new",
+                                                default_value=True,
                                             ),
                                         ),
                                     ],
@@ -143,345 +127,269 @@ class LinkDashlet(Dashlet):
                             ),
                             (
                                 "iframe",
-                                _("Embedded iframe"),
-                                Dictionary(
-                                    elements=[
-                                        (
-                                            "url",
-                                            TextInput(
-                                                title=_("URL"),
-                                                help=_(
-                                                    "URL to embed in iframe. "
-                                                    "Note: Some sites prevent iframe embedding."
-                                                ),
-                                                size=60,
-                                            ),
-                                        ),
-                                    ],
-                                    optional_keys=[],
+                                _("Embedded (iframe)"),
+                                TextInput(
+                                    title=_("URL to embed"),
+                                    help=_("URL to embed in iframe. Note: Not all sites allow embedding."),
+                                    size=60,
                                 ),
                             ),
                         ],
-                        default_value="dashboard",
+                        default_value=("dashboard", "main"),
                     ),
                 ),
                 (
-                    "title",
+                    "link_title",
                     TextInput(
                         title=_("Link Title"),
-                        help=_("Text displayed on the button/link"),
+                        help=_("Text displayed on the button"),
                         size=40,
                         allow_empty=False,
+                        default_value="Link",
                     ),
                 ),
                 (
-                    "description",
+                    "link_description",
                     TextAreaUnicode(
                         title=_("Description (optional)"),
-                        help=_("Additional description text shown below the title"),
+                        help=_("Additional text shown below title"),
                         rows=2,
                         cols=40,
                     ),
                 ),
                 (
-                    "style",
+                    "link_style",
                     DropdownChoice(
                         title=_("Display Style"),
-                        help=_("How to display the link"),
                         choices=[
                             ("button", _("Large Button")),
-                            ("card", _("Card with shadow")),
-                            ("minimal", _("Minimal link")),
-                            ("badge", _("Badge/Tag style")),
+                            ("card", _("Card")),
+                            ("minimal", _("Minimal")),
                         ],
                         default_value="button",
                     ),
                 ),
                 (
-                    "icon",
+                    "link_icon",
                     DropdownChoice(
-                        title=_("Icon (optional)"),
-                        help=_("Select an icon to display"),
+                        title=_("Icon"),
                         choices=[
                             ("", _("No icon")),
-                            ("📊", _("📊 Chart/Dashboard")),
-                            ("🖥️", _("🖥️ Server/Computer")),
-                            ("📈", _("📈 Graph/Trending")),
-                            ("🔍", _("🔍 Search/View")),
-                            ("⚙️", _("⚙️ Settings")),
-                            ("📱", _("📱 Mobile/Device")),
-                            ("🌐", _("🌐 Network/Globe")),
-                            ("📡", _("📡 Signal/Wireless")),
-                            ("🚀", _("🚀 Rocket/Launch")),
-                            ("⚡", _("⚡ Lightning/Fast")),
-                            ("🎯", _("🎯 Target/Focus")),
-                            ("📋", _("📋 List/Document")),
-                            ("🔔", _("🔔 Notification")),
-                            ("👥", _("👥 Users/Team")),
-                            ("🏢", _("🏢 Building")),
+                            ("📊", "📊 Dashboard"),
+                            ("🖥️", "🖥️ Server"),
+                            ("📈", "📈 Graph"),
+                            ("🔍", "🔍 Search"),
+                            ("⚙️", "⚙️ Settings"),
+                            ("🌐", "🌐 Network"),
+                            ("📡", "📡 Wireless"),
+                            ("🚀", "🚀 Launch"),
+                            ("⚡", "⚡ Fast"),
+                            ("📋", "📋 List"),
                         ],
                         default_value="📊",
                     ),
                 ),
                 (
-                    "background_color",
+                    "link_color",
                     DropdownChoice(
-                        title=_("Background Color"),
+                        title=_("Color Theme"),
                         choices=[
                             ("blue", _("Blue")),
                             ("green", _("Green")),
                             ("purple", _("Purple")),
                             ("orange", _("Orange")),
                             ("red", _("Red")),
-                            ("gray", _("Gray")),
-                            ("gradient-blue", _("Gradient Blue")),
-                            ("gradient-green", _("Gradient Green")),
-                            ("gradient-purple", _("Gradient Purple")),
-                            ("gradient-orange", _("Gradient Orange")),
                         ],
-                        default_value="gradient-blue",
-                    ),
-                ),
-                (
-                    "text_color",
-                    DropdownChoice(
-                        title=_("Text Color"),
-                        choices=[
-                            ("white", _("White")),
-                            ("black", _("Black")),
-                            ("gray", _("Gray")),
-                        ],
-                        default_value="white",
+                        default_value="blue",
                     ),
                 ),
             ],
         )
 
-    def _get_link_url(self):
-        """Generate the URL based on link type"""
-        link_config = self._dashlet_spec.get("link_type", ("dashboard", {}))
+    def _get_link_data(self):
+        """Get URL and target based on configuration"""
+        link_config = self._dashlet_spec.get("link_type", ("dashboard", "main"))
         link_type = link_config[0]
-        link_data = link_config[1]
+        link_value = link_config[1]
         
         if link_type == "dashboard":
-            dashboard_name = link_data.get("dashboard_name", "main")
-            return f"dashboard.py?name={dashboard_name}", "same"
-        
+            url = f"dashboard.py?name={link_value}"
+            target = "_self"
+            is_iframe = False
         elif link_type == "view":
-            view_name = link_data.get("view_name", "allhosts")
-            return f"view.py?view_name={view_name}", "same"
-        
+            url = f"view.py?view_name={link_value}"
+            target = "_self"
+            is_iframe = False
         elif link_type == "url":
-            url = link_data.get("url", "#")
-            open_in = link_data.get("open_in", "new")
-            return url, open_in
-        
+            url = link_value.get("url", "#")
+            target = "_blank" if link_value.get("open_new", True) else "_self"
+            is_iframe = False
         elif link_type == "iframe":
-            return None, None  # iframe handled separately
+            url = link_value
+            target = None
+            is_iframe = True
+        else:
+            url = "#"
+            target = "_self"
+            is_iframe = False
         
-        return "#", "same"
+        return url, target, is_iframe
 
     def show(self):
         """Render the dashlet"""
-        title = self._dashlet_spec.get("title", "Link")
-        description = self._dashlet_spec.get("description", "")
-        style = self._dashlet_spec.get("style", "button")
-        icon = self._dashlet_spec.get("icon", "")
-        bg_color = self._dashlet_spec.get("background_color", "gradient-blue")
-        text_color = self._dashlet_spec.get("text_color", "white")
+        title = self._dashlet_spec.get("link_title", "Link")
+        description = self._dashlet_spec.get("link_description", "")
+        style = self._dashlet_spec.get("link_style", "button")
+        icon = self._dashlet_spec.get("link_icon", "")
+        color = self._dashlet_spec.get("link_color", "blue")
         
-        link_config = self._dashlet_spec.get("link_type", ("dashboard", {}))
-        link_type = link_config[0]
+        url, target, is_iframe = self._get_link_data()
         
-        # CSS Styles
-        html.write_html(HTML("""
+        # Color mappings
+        color_map = {
+            "blue": ("667eea", "764ba2"),
+            "green": ("11998e", "38ef7d"),
+            "purple": ("a8edea", "fed6e3"),
+            "orange": ("f093fb", "f5576c"),
+            "red": ("fa709a", "fee140"),
+        }
+        
+        c1, c2 = color_map.get(color, ("667eea", "764ba2"))
+        
+# Styles
+        html.open_div(style="height: 100%; padding: 0; margin: 0;")
+
+        html.write_html(f"""
         <style>
-            .link-dashlet-container {
+            .link-dashlet-{self.dashlet_id} {{
                 height: 100%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                padding: 10px;
-            }
-            .link-dashlet-button {
+                padding: 20px;
+                box-sizing: border-box;
+                font-family: inherit;
+            }}
+
+            /* Gemeinsame Basis für den Link */
+            .link-dashlet-{self.dashlet_id} a {{
                 text-decoration: none;
+                color: white;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
                 width: 100%;
                 height: 100%;
-                padding: 20px;
                 border-radius: 12px;
+                background: linear-gradient(135deg, #{c1} 0%, #{c2} 100%);
                 transition: all 0.3s ease;
-                cursor: pointer;
+                box-sizing: border-box;
                 text-align: center;
-            }
-            .link-dashlet-button:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-            }
-            .link-dashlet-card {
-                text-decoration: none;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                width: 100%;
-                height: 100%;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                transition: all 0.3s ease;
-                cursor: pointer;
-                text-align: center;
-                background: white;
-            }
-            .link-dashlet-card:hover {
-                box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-            }
-            .link-dashlet-minimal {
-                text-decoration: none;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                padding: 15px;
-                border-radius: 6px;
-                transition: all 0.2s ease;
-                cursor: pointer;
-            }
-            .link-dashlet-minimal:hover {
-                background: rgba(0,0,0,0.05);
-            }
-            .link-dashlet-badge {
-                text-decoration: none;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 10px 20px;
-                border-radius: 20px;
-                font-weight: 600;
-                transition: all 0.2s ease;
-                cursor: pointer;
-            }
-            .link-dashlet-badge:hover {
-                transform: scale(1.05);
-            }
-            .link-dashlet-icon {
+            }}
+
+            .link-dashlet-{self.dashlet_id} a:hover {{
+                transform: translateY(-6px);
+                box-shadow: 0 12px 25px rgba(0,0,0,0.25);
+            }}
+
+            /* Icon und Textgrößen */
+            .link-dashlet-{self.dashlet_id} .icon {{
                 font-size: 48px;
-                margin-bottom: 10px;
-            }
-            .link-dashlet-icon-small {
-                font-size: 24px;
-            }
-            .link-dashlet-title {
-                font-size: 20px;
+                margin-bottom: 12px;
+            }}
+            .link-dashlet-{self.dashlet_id} .title {{
                 font-weight: bold;
-                margin-bottom: 5px;
-            }
-            .link-dashlet-title-small {
-                font-size: 16px;
-                font-weight: 600;
-            }
-            .link-dashlet-description {
+                margin-bottom: 6px;
+            }}
+            .link-dashlet-{self.dashlet_id} .desc {{
                 font-size: 13px;
                 opacity: 0.9;
-                margin-top: 5px;
-            }
-            
-            /* Colors */
-            .bg-blue { background: #3b82f6; }
-            .bg-green { background: #10b981; }
-            .bg-purple { background: #8b5cf6; }
-            .bg-orange { background: #f59e0b; }
-            .bg-red { background: #ef4444; }
-            .bg-gray { background: #6b7280; }
-            .bg-gradient-blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-            .bg-gradient-green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-            .bg-gradient-purple { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
-            .bg-gradient-orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-            
-            .text-white { color: white; }
-            .text-black { color: #1f2937; }
-            .text-gray { color: #6b7280; }
-            
-            .link-dashlet-iframe {
+                line-height: 1.3;
+            }}
+
+            /* STYLE: Large Button */
+            .style-button a {{
+                padding: 30px;
+                font-size: 22px;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            }}
+            .style-button .title {{
+                font-size: 24px;
+            }}
+            .style-button .icon {{
+                font-size: 60px;
+            }}
+
+            /* STYLE: Card */
+            .style-card a {{
+                padding: 20px;
+                box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+                border: 1px solid rgba(255,255,255,0.2);
+            }}
+            .style-card .title {{
+                font-size: 20px;
+            }}
+            .style-card .icon {{
+                font-size: 50px;
+            }}
+
+            /* STYLE: Minimal */
+            .style-minimal a {{
+                background: none !important;
+                color: #333 !important;
+                padding: 10px;
+                border-radius: 8px;
+            }}
+            .style-minimal a:hover {{
+                background: rgba(0,0,0,0.05) !important;
+                transform: none;
+                box-shadow: none;
+            }}
+            .style-minimal .icon {{
+                font-size: 32px;
+                margin-bottom: 8px;
+            }}
+            .style-minimal .title {{
+                font-size: 16px;
+                color: #333;
+            }}
+            .style-minimal .desc {{
+                font-size: 12px;
+                color: #666;
+            }}
+
+            /* iFrame immer vollflächig, unabhängig vom Style */
+            .link-dashlet-{self.dashlet_id} iframe {{
                 width: 100%;
                 height: 100%;
                 border: none;
                 border-radius: 8px;
-            }
+            }}
         </style>
-        """))
-        
-        # Render based on link type
-        if link_type == "iframe":
-            # Iframe embed
-            iframe_url = link_config[1].get("url", "")
-            html.open_div(style="height: 100%;")
-            html.write_html(HTML(f'<iframe src="{html.attrencode(iframe_url)}" class="link-dashlet-iframe"></iframe>'))
-            html.close_div()
+        """)
+
+        if is_iframe:
+            # iFrame immer gleich darstellen
+            html.write_html(HTML(f"""
+            <div class="link-dashlet-{self.dashlet_id}" style="padding: 0;">
+                <iframe src="{html.attrencode(url)}" allowfullscreen></iframe>
+            </div>
+            """))
         else:
-            # Regular link/button
-            url, target = self._get_link_url()
-            target_attr = '_blank' if target == 'new' else '_self'
-            
-            html.open_div(class_="link-dashlet-container")
-            
-            if style == "button":
-                # Large button style
-                html.open_a(
-                    href=url,
-                    target=target_attr,
-                    class_=f"link-dashlet-button bg-{bg_color} text-{text_color}"
-                )
-                if icon:
-                    html.div(icon, class_="link-dashlet-icon")
-                html.div(title, class_="link-dashlet-title")
-                if description:
-                    html.div(description, class_="link-dashlet-description")
-                html.close_a()
-                
-            elif style == "card":
-                # Card style
-                html.open_a(
-                    href=url,
-                    target=target_attr,
-                    class_="link-dashlet-card"
-                )
-                if icon:
-                    html.div(icon, class_="link-dashlet-icon")
-                html.div(title, class_=f"link-dashlet-title text-{text_color if text_color != 'white' else 'black'}")
-                if description:
-                    html.div(description, class_=f"link-dashlet-description text-gray")
-                html.close_a()
-                
-            elif style == "minimal":
-                # Minimal link style
-                html.open_a(
-                    href=url,
-                    target=target_attr,
-                    class_=f"link-dashlet-minimal text-{text_color if text_color != 'white' else 'black'}"
-                )
-                if icon:
-                    html.span(icon, class_="link-dashlet-icon-small")
-                html.open_div()
-                html.div(title, class_="link-dashlet-title-small")
-                if description:
-                    html.div(description, style="font-size: 12px; color: #6b7280;")
-                html.close_div()
-                html.close_a()
-                
-            elif style == "badge":
-                # Badge style
-                html.open_a(
-                    href=url,
-                    target=target_attr,
-                    class_=f"link-dashlet-badge bg-{bg_color} text-{text_color}"
-                )
-                if icon:
-                    html.span(icon, class_="link-dashlet-icon-small")
-                html.span(title, style="font-size: 14px;")
-                html.close_a()
-            
+            # Link/Button/Card/Minimal
+            style_class = f"style-{style}"
+
+            html.open_div(class_=f"link-dashlet-{self.dashlet_id} {style_class}")
+            html.open_a(href=url, target=target if target else None)
+
+            if icon:
+                html.div(icon, class_="icon")
+            html.div(title, class_="title")
+            if description:
+                html.div(description, class_="desc")
+
+            html.close_a()
             html.close_div()
+
+        html.close_div()
