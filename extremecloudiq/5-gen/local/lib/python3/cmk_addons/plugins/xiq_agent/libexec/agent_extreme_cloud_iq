@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Copyright (C) 2025 bh2005
+# License: GNU General Public License v2
+
+"""
+Special agent for monitoring Extreme Cloud IQ Access Points
+
+This agent queries the Extreme Cloud IQ API to gather information about
+Access Points, their connection status, client counts, and performance metrics.
+
+Usage:
+    agent_extreme_cloud_iq --username USER --password PASS
+    agent_extreme_cloud_iq --api-token TOKEN
+
+Output format:
+    The agent outputs data in Check_MK agent format with sections:
+    - <<<extreme_summary>>>: Overall statistics
+    - <<<extreme_ap_status>>>: Per-AP status (piggyback)
+    - <<<extreme_ap_clients>>>: Per-AP client counts (piggyback)
+    - <<<extreme_ap_details>>>: Per-AP performance data (piggyback)
+
+Install to: local/lib/python3/cmk_addons/plugins/xiq_agent/libexec/agent_extreme_cloud_iq
+"""
+
+import sys
+import argparse
+import json
+import logging
+from typing import Dict, List, Any, Optional
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+# API Configuration
+API_BASE_URL = "https://api.extremecloudiq.com"
+API_TIMEOUT = 30
+
+# Logging setup
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(levelname)s: %(message)s'
+)
+LOGGER = logging.getLogger(__name__)
+
+
+def parse_arguments(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    # Authentication group
+    auth_group = parser.add_mutually_exclusive_group(required=True)
+    auth_group.add_argument(
+        "--api-token",
+        help="API token for authentication"
+    )
+    auth_group.add_argument(
+        "--username",
+        help="Username for authentication (requires --password)"
+    )
+    
+    parser.add_argument(
+        "--password",
+        help="Password for authentication (used with --username)"
+    )
+    
+    # Optional parameters
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=API_TIMEOUT,
+        help=f"API timeout in seconds (default: {API_TIMEOUT})"
+    )
+    
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug output"
+    )
+    
+    parser.add_argument(
+        "--no-cert-check",
+        action="store_true",
+        help="Disable SSL certificate verification (insecure!)"
+    )
+    
+    args = parser.parse_args(argv)
+    
+    # Validate username/password combination
+    if args.username and not args.password:
+        parser.error("--username requires --password")
+    
+    return args
+
+
+class ExtremeCloudIQAPI:
+    """Client for Extreme Cloud IQ API"""
+    
+    def __init__(
+        self,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        api_token: Optional[str] = None,
+        timeout: int = API_TIMEOUT,
+        verify_ssl: bool = True,
+        debug: bool = False
+    ):
+        self.username = username
+        self.password = password
+        self.api_token = api_token
+        self.timeout = timeout
+        self.verify_ssl = verify_ssl
+        self.access_token: Optional[str] = None
+        
+        if debug:
+            LOGGER.setLevel(logging.DEBUG)
+    
+    def _make_request(
+        self,
+        endpoint: str,
+        method: str = "GET",
+        data: Optional[Dict] = None,
+        auth_required: bool = True
+    ) -> Any:
+        """Make HTTP request to Extreme Cloud IQ API"""
+        url = f"{API_BASE_URL}{endpoint}"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        if auth_required and self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+        
+        body = json.dumps(data).encode('utf-8') if data else None
+        req = Request(url, data=body, headers=headers, method=method)
+        
+        LOGGER.debug(f"{method} {url}")
+        
+        try:
+            with urlopen(req, timeout=self.timeout) as response:
+                response_data = response.read().decode('utf-8')
+                return json.loads(response_data) if response_data else {}
+        except HTTPError as e:
+            error_msg = e.read().decode('utf-8')
+            LOGGER.error(f"HTTP {e.code}: {error_msg}")
+            raise
+        except URLError as e:
+            LOGGER.error(f"Connection error: {e.reason}")
+            raise
+    
+    def authenticate(self) -> bool:
+        """Authenticate with Extreme Cloud IQ API"""
+        if self.api_token:
+            self.access_token = self.api_token
+            LOGGER.info("Using provided API token")
+            return True
+        
+        if not self.username or not self.password:
+            raise ValueError("Authentication credentials required")
+        
+        LOGGER.info(f"Authenticating as {self.username}")
+        
+        try:
+            response = self._make_request(
+                "/login",
+                method="POST",
+                data={"username": self.username, "password": self.password},
+                auth_required=False
+            )
+            
+            self.access_token = response.get("access_token")
+            if not self.access_token:
+                raise Exception("No access token in response")
+            
+            LOGGER.info("Authentication successful")
+            return True
+        except Exception as e:
+            LOGGER.error(f"Authentication failed: {e}")
+            raise
+    
+    def get_devices(self) -> List[Dict[str, Any]]:
+        """Get all devices (Access Points)"""
+        LOGGER.info("Fetching devices...")
+        
+        try:
+            all_devices = []
+            page = 1
+            page_size = 100
+            
+            while True:
+                endpoint = f"/devices?page={page}&limit={page_size}&deviceTypes=REAL"
+                response = self._make_request(endpoint)
+                
+                if isinstance(response, dict) and "data" in response:
+                    devices = response.get("data", [])
+                    all_devices.extend(devices)
+                    
+                    pagination = response.get("pagination", {})
+                    total = pagination.get("total", 0)
+                    
+                    if len(all_devices) >= total or not devices:
+                        break
+                    page += 1
+                else:
+                    all_devices = response if isinstance(response, list) else []
+                    break
+            
+            # Filter Access Points
+            aps = [d for d in all_devices if d.get("device_function") == "AP"]
+            LOGGER.info(f"Found {len(aps)} Access Points")
+            return aps
+        except Exception as e:
+            LOGGER.error(f"Failed to fetch devices: {e}")
+            return []
+    
+    def get_clients(self) -> List[Dict[str, Any]]:
+        """Get all connected clients"""
+        LOGGER.info("Fetching clients...")
+        
+        try:
+            response = self._make_request("/clients")
+            
+            if isinstance(response, dict) and "data" in response:
+                clients = response.get("data", [])
+            else:
+                clients = response if isinstance(response, list) else []
+            
+            LOGGER.info(f"Found {len(clients)} clients")
+            return clients
+        except Exception as e:
+            LOGGER.error(f"Failed to fetch clients: {e}")
+            return []
+
+
+def output_section(section_name: str):
+    """Output Check_MK section header"""
+    print(f"<<<{section_name}>>>")
+
+
+def output_piggyback_host(hostname: str):
+    """Start piggyback output for specific host"""
+    print(f"<<<<{hostname}>>>>")
+
+
+def end_piggyback():
+    """End piggyback output"""
+    print("<<<<>>>>")
+
+
+def format_ap_status(ap: Dict[str, Any]) -> str:
+    """
+    Format AP status for Check_MK
+    Output format: hostname|serial|mac|ip|model|status|connection_state|sw_version|site
+    """
+    hostname = ap.get("hostname", ap.get("host_name", ap.get("serial_number", "unknown")))
+    serial = ap.get("serial_number", "unknown")
+    mac = ap.get("mac_address", "unknown")
+    ip = ap.get("ip_address", "unknown")
+    model = ap.get("product_type", "unknown")
+    
+    connected = ap.get("connected", False)
+    connection_state = ap.get("connection_state", "DISCONNECTED")
+    status = "1" if connected and connection_state == "CONNECTED" else "0"
+    
+    software_version = ap.get("software_version", "unknown")
+    
+    location = ap.get("location", {})
+    site_name = location.get("site_name", "N/A") if isinstance(location, dict) else "N/A"
+    
+    return f"{hostname}|{serial}|{mac}|{ip}|{model}|{status}|{connection_state}|{software_version}|{site_name}"
+
+
+def format_ap_clients(ap: Dict[str, Any], all_clients: List[Dict[str, Any]]) -> str:
+    """
+    Format client count for specific AP
+    Output format: total_clients|radio_2.4ghz|radio_5ghz
+    """
+    ap_mac = ap.get("mac_address", "").lower()
+    
+    ap_clients = [c for c in all_clients if c.get("ap_mac", "").lower() == ap_mac]
+    
+    client_count = len(ap_clients)
+    radio_2_4 = len([c for c in ap_clients if c.get("radio", "").startswith("wifi0")])
+    radio_5 = len([c for c in ap_clients if c.get("radio", "").startswith("wifi1")])
+    
+    return f"{client_count}|{radio_2_4}|{radio_5}"
+
+
+def format_ap_details(ap: Dict[str, Any]) -> str:
+    """
+    Format detailed AP information
+    Output format: cpu_usage|memory_usage|uptime|power_mode|poe_power
+    """
+    cpu_usage = ap.get("cpu_usage", 0)
+    memory_usage = ap.get("memory_usage", 0)
+    uptime = ap.get("up_time", 0)
+    power_mode = ap.get("power_mode", "unknown")
+    poe_power = ap.get("poe_power", 0)
+    
+    return f"{cpu_usage}|{memory_usage}|{uptime}|{power_mode}|{poe_power}"
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main function"""
+    args = parse_arguments(argv)
+    
+    try:
+        # Initialize API client
+        client = ExtremeCloudIQAPI(
+            username=args.username,
+            password=args.password,
+            api_token=args.api_token,
+            timeout=args.timeout,
+            verify_ssl=not args.no_cert_check,
+            debug=args.debug
+        )
+        
+        # Authenticate
+        client.authenticate()
+        
+        # Fetch data
+        devices = client.get_devices()
+        clients = client.get_clients()
+        
+        if not devices:
+            LOGGER.warning("No Access Points found")
+        
+        # Output data for each AP as piggyback host
+        for ap in devices:
+            hostname = ap.get("hostname", ap.get("host_name", ap.get("serial_number", "unknown")))
+            
+            # Start piggyback for this AP
+            output_piggyback_host(hostname)
+            
+            # AP Status Section
+            output_section("extreme_ap_status")
+            print(format_ap_status(ap))
+            
+            # AP Clients Section
+            output_section("extreme_ap_clients")
+            print(format_ap_clients(ap, clients))
+            
+            # AP Details Section
+            output_section("extreme_ap_details")
+            print(format_ap_details(ap))
+            
+            # End piggyback
+            end_piggyback()
+        
+        # Output summary on main host
+        output_section("extreme_summary")
+        print(f"access_points={len(devices)}|total_clients={len(clients)}")
+        
+        return 0
+    
+    except Exception as e:
+        LOGGER.error(f"Fatal error: {e}")
+        if args.debug:
+            raise
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
