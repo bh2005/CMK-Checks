@@ -82,7 +82,7 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
                                 title=Title("API Token"),
                                 help_text=Help(
                                     "API Token generated in Extreme Cloud IQ "
-                                    "(Global Settings → API Token Management). "
+                                    "(Global Settings ? API Token Management). "
                                     "This is the recommended authentication method."
                                 ),
                             ),
@@ -133,6 +133,6 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
 rule_spec_extreme_cloud_iq_special_agent = SpecialAgent(
     name="extreme_cloud_iq",
     title=Title("Extreme Cloud IQ Access Points"),
-    topic=Topic.CLOUD,
+    topic=Topic.GENERAL,
     parameter_form=_parameter_form_extreme_cloud_iq,
 )
