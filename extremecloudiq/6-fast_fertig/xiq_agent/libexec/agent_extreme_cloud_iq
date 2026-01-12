@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+import argparse
+import requests
+import time
+from typing import List, Dict, Any
+
+DEFAULT_BASE_URL = "https://api.extremecloudiq.com"
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--api-token", required=True)
+    parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument("--no-cert-check", action="store_true")
+    parser.add_argument("address")
+    return parser.parse_args()
+
+class XIQClient:
+    def __init__(self, token: str, base_url: str, timeout: int, verify: bool):
+        self.token = token
+        self.base_url = base_url.rstrip('/')
+        self.timeout = timeout
+        self.verify = verify
+        self.headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Checkmk-Special-Agent"
+        }
+
+    def get_all_devices(self) -> List[Dict[str, Any]]:
+        all_devices = []
+        page = 1
+        page_size = 100
+        
+        while True:
+            url = f"{self.base_url}/devices"
+            # Wir holen uns mehr Details (FULL), um die device_function prüfen zu können
+            params = {
+                "page": page, 
+                "limit": page_size, 
+                "deviceTypes": "REAL"
+            }
+            
+            try:
+                response = requests.get(
+                    url, headers=self.headers, params=params, 
+                    timeout=self.timeout, verify=self.verify
+                )
+                
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 10))
+                    time.sleep(retry_after + 1)
+                    continue
+                
+                response.raise_for_status()
+                data = response.json().get("data", [])
+                
+                if not data:
+                    break
+                
+                all_devices.extend(data)
+                if len(data) < page_size:
+                    break
+                    
+                page += 1
+                time.sleep(0.05)
+                
+            except Exception as e:
+                sys.stderr.write(f"ERROR: Page {page} failed: {e}\n")
+                break
+                
+        return all_devices
+
+def main():
+    args = parse_args()
+    verify = not args.no_cert_check
+    if not verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    client = XIQClient(args.api_token, DEFAULT_BASE_URL, args.timeout, verify)
+    devices = client.get_all_devices()
+
+    total_clients = 0
+    ap_count = 0
+
+    for device in devices:
+        # PRÄZISER FILTER: Nur Geräte mit Funktion "AP" (Access Point)
+        if device.get("device_function") != "AP":
+            continue
+
+        ap_count += 1
+        hostname = device.get("hostname", device.get("serial_number", "unknown"))
+        sn = device.get("serial_number", "unknown")
+        mac = device.get("mac_address", "unknown")
+        ip = device.get("ip_address", "0.0.0.0")
+        
+        # Modell-Feld korrigiert (product_type ist bei Extreme meist das Modell)
+        model = device.get("product_type", device.get("model", "unknown"))
+        
+        is_connected = 1 if device.get("connected") is True else 0
+        conn_state = "CONNECTED" if is_connected else "DISCONNECTED"
+        clients = device.get("client_count", 0)
+        total_clients += clients
+
+        # Piggyback Output
+        print(f"<<<<{hostname}>>>>")
+        print("<<<extreme_ap_status:sep(124)>>>")
+        print(f"{hostname}|{sn}|{mac}|{ip}|{model}|{is_connected}|{conn_state}|N/A|N/A")
+        print("<<<extreme_ap_clients:sep(124)>>>")
+        print(f"{clients}|0|0")
+        print("<<<<>>>>")
+
+    # Summary auf Cloud-Host Ebene
+    print("<<<extreme_summary:sep(124)>>>")
+    print(f"access_points|{ap_count}")
+    print(f"total_clients|{total_clients}")
+
+if __name__ == "__main__":
+    main()
