@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Copyright (C) 2025 bh2005
+# Copyright (C) 2025 Your Company
 # License: GNU General Public License v2
 
 """
@@ -13,17 +13,17 @@ Install to: local/lib/python3/cmk_addons/plugins/xiq_agent/rulesets/special_agen
 
 from cmk.rulesets.v1 import Help, Title, Label
 from cmk.rulesets.v1.form_specs import (
+    CascadingSingleChoice,
+    CascadingSingleChoiceElement,
     DefaultValue,
     DictElement,
     Dictionary,
     Integer,
     Password,
-    SingleChoice,
-    SingleChoiceElement,
     String,
     validators,
 )
-from cmk.rulesets.v1.rule_specs import SpecialAgent, Topic, Help, Title
+from cmk.rulesets.v1.rule_specs import SpecialAgent, Topic
 
 
 def _parameter_form_extreme_cloud_iq() -> Dictionary:
@@ -39,14 +39,14 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
         elements={
             "authentication": DictElement(
                 required=True,
-                parameter_form=SingleChoice(
+                parameter_form=CascadingSingleChoice(
                     title=Title("Authentication Method"),
                     help_text=Help(
                         "Choose how to authenticate with the Extreme Cloud IQ API. "
                         "API Token is recommended for production use."
                     ),
                     elements=[
-                        SingleChoiceElement(
+                        CascadingSingleChoiceElement(
                             name="credentials",
                             title=Title("Username and Password"),
                             parameter_form=Dictionary(
@@ -75,7 +75,7 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
                                 }
                             ),
                         ),
-                        SingleChoiceElement(
+                        CascadingSingleChoiceElement(
                             name="token",
                             title=Title("API Token"),
                             parameter_form=Password(
@@ -105,20 +105,22 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
             ),
             "no_cert_check": DictElement(
                 required=False,
-                parameter_form=SingleChoice(
+                parameter_form=CascadingSingleChoice(
                     title=Title("SSL Certificate Verification"),
                     help_text=Help(
                         "Enable or disable SSL certificate verification. "
                         "Disable only if using self-signed certificates (not recommended for production)"
                     ),
                     elements=[
-                        SingleChoiceElement(
+                        CascadingSingleChoiceElement(
                             name="verify",
                             title=Title("Enable (recommended)"),
+                            parameter_form=Dictionary(elements={}),
                         ),
-                        SingleChoiceElement(
+                        CascadingSingleChoiceElement(
                             name="no_verify",
                             title=Title("Disable (insecure)"),
+                            parameter_form=Dictionary(elements={}),
                         ),
                     ],
                     prefill=DefaultValue("verify"),
