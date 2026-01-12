@@ -14,7 +14,6 @@ def parse_args():
     parser.add_argument("--api-token", required=True)
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--no-cert-check", action="store_true")
-    parser.add_argument("address")
     return parser.parse_args()
 
 class XIQClient:
@@ -37,7 +36,7 @@ class XIQClient:
         
         while True:
             url = f"{self.base_url}/devices"
-            # Wir holen uns mehr Details (FULL), um die device_function prüfen zu können
+            # Wir holen uns mehr Details (FULL), um die device_function prÃ¼fen zu kÃ¶nnen
             params = {
                 "page": page, 
                 "limit": page_size, 
@@ -88,7 +87,7 @@ def main():
     ap_count = 0
 
     for device in devices:
-        # PRÄZISER FILTER: Nur Geräte mit Funktion "AP" (Access Point)
+        # PRÃ„ZISER FILTER: Nur GerÃ¤te mit Funktion "AP" (Access Point)
         if device.get("device_function") != "AP":
             continue
 

@@ -25,7 +25,6 @@ from cmk.rulesets.v1.form_specs import (
 )
 from cmk.rulesets.v1.rule_specs import SpecialAgent, Topic
 
-
 def _parameter_form_extreme_cloud_iq() -> Dictionary:
     """Define the parameter form for the special agent"""
     return Dictionary(
@@ -33,19 +32,29 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
         help_text=Help(
             "Monitor Extreme Networks Access Points via Extreme Cloud IQ API. "
             "This special agent queries the Extreme Cloud IQ REST API to gather "
-            "information about Access Points, their connection status, client counts, "
-            "and performance metrics."
+            "information about Access Points."
         ),
         elements={
             "authentication": DictElement(
                 required=True,
                 parameter_form=CascadingSingleChoice(
                     title=Title("Authentication Method"),
-                    help_text=Help(
-                        "Choose how to authenticate with the Extreme Cloud IQ API. "
-                        "API Token is recommended for production use."
-                    ),
                     elements=[
+                        CascadingSingleChoiceElement(
+                            name="token",
+                            title=Title("API Token"),
+                            parameter_form=Dictionary(
+                                elements={
+                                    "token": DictElement(
+                                        required=True,
+                                        parameter_form=Password(
+                                            title=Title("API Token"),
+                                            help_text=Help("API Token generated in Extreme Cloud IQ"),
+                                        ),
+                                    ),
+                                }
+                            ),
+                        ),
                         CascadingSingleChoiceElement(
                             name="credentials",
                             title=Title("Username and Password"),
@@ -53,38 +62,13 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
                                 elements={
                                     "username": DictElement(
                                         required=True,
-                                        parameter_form=String(
-                                            title=Title("Username"),
-                                            help_text=Help(
-                                                "Extreme Cloud IQ username (usually an email address)"
-                                            ),
-                                            custom_validate=(
-                                                validators.LengthInRange(min_value=1),
-                                            ),
-                                        ),
+                                        parameter_form=String(title=Title("Username")),
                                     ),
                                     "password": DictElement(
                                         required=True,
-                                        parameter_form=Password(
-                                            title=Title("Password"),
-                                            help_text=Help(
-                                                "Password for the Extreme Cloud IQ user"
-                                            ),
-                                        ),
+                                        parameter_form=Password(title=Title("Password")),
                                     ),
                                 }
-                            ),
-                        ),
-                        CascadingSingleChoiceElement(
-                            name="token",
-                            title=Title("API Token"),
-                            parameter_form=Password(
-                                title=Title("API Token"),
-                                help_text=Help(
-                                    "API Token generated in Extreme Cloud IQ "
-                                    "(Global Settings ? API Token Management). "
-                                    "This is the recommended authentication method."
-                                ),
                             ),
                         ),
                     ],
@@ -95,11 +79,7 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
                 required=False,
                 parameter_form=Integer(
                     title=Title("API Timeout"),
-                    help_text=Help("Timeout in seconds for API requests"),
                     prefill=DefaultValue(30),
-                    custom_validate=(
-                        validators.NumberInRange(min_value=5, max_value=120),
-                    ),
                     label=Label("seconds"),
                 ),
             ),
@@ -107,10 +87,6 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
                 required=False,
                 parameter_form=CascadingSingleChoice(
                     title=Title("SSL Certificate Verification"),
-                    help_text=Help(
-                        "Enable or disable SSL certificate verification. "
-                        "Disable only if using self-signed certificates (not recommended for production)"
-                    ),
                     elements=[
                         CascadingSingleChoiceElement(
                             name="verify",
@@ -128,7 +104,6 @@ def _parameter_form_extreme_cloud_iq() -> Dictionary:
             ),
         },
     )
-
 
 rule_spec_extreme_cloud_iq_special_agent = SpecialAgent(
     name="extreme_cloud_iq",
