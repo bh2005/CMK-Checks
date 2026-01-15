@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Special agent for Shelly devices
+"""
+
+import sys
+import argparse
+import json
+import urllib.request
+import urllib.error
+from typing import Dict, Any, Optional
+from cmk.utils.password_store import extract
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Check_MK Special Agent for Shelly devices")
+    parser.add_argument("--hostname", required=True, help="Hostname or IP address of the Shelly device")
+    parser.add_argument("--port", type=int, default=80, help="Port of the Shelly device (default: 80)")
+    parser.add_argument("--protocol", default="http", choices=["http", "https"], help="Protocol to use")
+    parser.add_argument("--username", help="Username for authentication")
+    parser.add_argument("--password", help="Password ID from password store (format: password_id)")
+    parser.add_argument("--timeout", type=int, default=10, help="Timeout in seconds")
+    parser.add_argument("--device-type", default="gen2", choices=["gen1", "gen2"], 
+                       help="Shelly generation (gen1 or gen2)")
+    
+    return parser.parse_args()
+
+
+def get_password(password_spec: str) -> Optional[str]:
+    """
+    Extract password from Check_MK password store
+    
+    Args:
+        password_spec: Password ID (e.g., "password_1")
+    
+    Returns:
+        The actual password or None if not found
+    """
+    if not password_spec:
+        return None
+    
+    try:
+        # Format für extract: ("password", "password_id")
+        password_tuple = ("password", password_spec)
+        password = extract(password_tuple)
+        return password
+    except Exception as e:
+        sys.stderr.write(f"Error extracting password: {e}\n")
+        return None
+
+
+def make_request(url: str, username: Optional[str] = None, password: Optional[str] = None, 
+                timeout: int = 10) -> Dict[str, Any]:
+    """
+    Make HTTP request to Shelly device
+    
+    Args:
+        url: URL to request
+        username: Optional username for authentication
+        password: Optional password for authentication
+        timeout: Request timeout in seconds
+    
+    Returns:
+        JSON response as dictionary
+    """
+    try:
+        request = urllib.request.Request(url)
+        
+        # Add authentication if provided
+        if username and password:
+            import base64
+            credentials = f"{username}:{password}"
+            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+            request.add_header("Authorization", f"Basic {encoded_credentials}")
+        
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = response.read().decode('utf-8')
+            return json.loads(data)
+    
+    except urllib.error.HTTPError as e:
+        sys.stderr.write(f"HTTP Error {e.code}: {e.reason}\n")
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        sys.stderr.write(f"URL Error: {e.reason}\n")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"JSON decode error: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Unexpected error: {e}\n")
+        sys.exit(1)
+
+
+def get_shelly_gen2_data(base_url: str, username: Optional[str], password: Optional[str], 
+                        timeout: int) -> Dict[str, Any]:
+    """
+    Get data from Shelly Gen2 device using RPC API
+    
+    Args:
+        base_url: Base URL of the device
+        username: Optional username
+        password: Optional password
+        timeout: Request timeout
+    
+    Returns:
+        Dictionary with all collected data
+    """
+    data = {}
+    
+    # Shelly.GetStatus - Haupt-Status-Endpoint
+    status_url = f"{base_url}/rpc/Shelly.GetStatus"
+    data['status'] = make_request(status_url, username, password, timeout)
+    
+    # Shelly.GetDeviceInfo - Geräte-Informationen
+    info_url = f"{base_url}/rpc/Shelly.GetDeviceInfo"
+    data['device_info'] = make_request(info_url, username, password, timeout)
+    
+    # Shelly.GetConfig - Konfiguration (optional, kann groß sein)
+    try:
+        config_url = f"{base_url}/rpc/Shelly.GetConfig"
+        data['config'] = make_request(config_url, username, password, timeout)
+    except:
+        # Config ist optional, falls es fehlschlägt, ignorieren wir es
+        pass
+    
+    return data
+
+
+def get_shelly_gen1_data(base_url: str, username: Optional[str], password: Optional[str], 
+                        timeout: int) -> Dict[str, Any]:
+    """
+    Get data from Shelly Gen1 device using REST API
+    
+    Args:
+        base_url: Base URL of the device
+        username: Optional username
+        password: Optional password
+        timeout: Request timeout
+    
+    Returns:
+        Dictionary with all collected data
+    """
+    data = {}
+    
+    # /status - Haupt-Status-Endpoint für Gen1
+    status_url = f"{base_url}/status"
+    data['status'] = make_request(status_url, username, password, timeout)
+    
+    # /settings - Geräte-Einstellungen
+    settings_url = f"{base_url}/settings"
+    data['settings'] = make_request(settings_url, username, password, timeout)
+    
+    # /shelly - Geräte-Informationen
+    try:
+        info_url = f"{base_url}/shelly"
+        data['device_info'] = make_request(info_url, username, password, timeout)
+    except:
+        pass
+    
+    return data
+
+
+def output_piggyback_data(hostname: str, data: Dict[str, Any]):
+    """
+    Output data in Check_MK piggyback format
+    
+    Args:
+        hostname: Hostname for piggyback header
+        data: Dictionary with collected data
+    """
+    # Piggyback header
+    print(f"<<<<{hostname}>>>>")
+    
+    # Section für Shelly-Daten
+    print("<<<shelly:sep(0)>>>")
+    print(json.dumps(data))
+    
+    # Piggyback footer
+    print(f"<<<<>>>>")
+
+
+def main():
+    args = parse_arguments()
+    
+    # Extract password from password store if provided
+    password = None
+    if args.password:
+        password = get_password(args.password)
+        if password is None:
+            sys.stderr.write(f"Warning: Could not extract password '{args.password}' from password store\n")
+    
+    # Build base URL
+    base_url = f"{args.protocol}://{args.hostname}:{args.port}"
+    
+    # Get data based on device generation
+    if args.device_type == "gen2":
+        data = get_shelly_gen2_data(base_url, args.username, password, args.timeout)
+    else:
+        data = get_shelly_gen1_data(base_url, args.username, password, args.timeout)
+    
+    # Output data in piggyback format
+    output_piggyback_data(args.hostname, data)
+    
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
