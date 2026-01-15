@@ -1,0 +1,14 @@
+
+/* Minimal icons.css (Demo). Ersetze/erweitere bei Bedarf durch echte Icon-Klassen. */
+.gg-dashboard, .gg-server { display:inline-block; width:1em; height:1em; position:relative; }
+.gg-dashboard::before, .gg-dashboard::after, .gg-server::before, .gg-server::after {
+  content:""; position:absolute; box-sizing:border-box; color:inherit;
+}
+/* gg-dashboard: 2x2 panels */
+.gg-dashboard { font-size:48px; }
+.gg-dashboard::before {left:0;top:0;width:45%;height:45%;border:2px solid currentColor;border-radius:3px;}
+.gg-dashboard::after {right:0;bottom:0;width:45%;height:45%;border:2px solid currentColor;border-radius:3px;}
+/* gg-server: simple rack */
+.gg-server { font-size:48px; }
+.gg-server::before {left:0;top:10%;right:0;bottom:10%;border:2px solid currentColor;border-radius:4px;}
+.gg-server::after {left:12%;right:12%;height:2px;top:48%;background:currentColor;}
