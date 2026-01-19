@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+# Dateipfad: ~/local/lib/python3/cmk_addons/plugins/logincheck/libexec/agent_logincheck
+
+import argparse
+import sys
+
+import requests
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Checkmk special agent: simple HTTP login check")
+    parser.add_argument("--url", required=True, help="Login endpoint URL")
+    parser.add_argument("--username", required=True, help="Username")
+    parser.add_argument("--password", required=True, help="Password")
+    parser.add_argument("--insecure", action="store_true", help="Disable SSL verification")
+
+    args = parser.parse_args()
+
+    session = requests.Session()
+    if args.insecure:
+        session.verify = False
+        
+    session.proxies = {
+    "http":  "http://http-proxy-ks1.k-plus-s.net:8080",
+    "https": "http://http-proxy-ks1.k-plus-s.net:8080",
+    "no_proxy": "127.0.0.1,localhost,10.0.0.0/8,10.127.127.39,edi.prd.k-plus-s.com,193.238.11.16,*.k-plus-s.com,*.k-plus-s.net"
+}
+
+    payload = {
+        "username": args.username,
+        "password": args.password,
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    try:
+        resp = session.post(
+            args.url,
+            json=payload,
+            headers=headers,
+            timeout=60,
+            allow_redirects=True,
+        )
+    except requests.RequestException as e:
+        print("<<<logincheck>>>")
+        print(f"STATUS:FAILED CODE:EXCEPTION RESPONSE:{str(e)}")
+        sys.exit(0)
+
+    status = "OK" if resp.status_code == 200 else "FAILED"
+    # Response auf 1500 Zeichen kuerzen (ausreichend fuer Token + Infos)
+    response_text = resp.text[:1500].replace("\n", " ").replace("\r", "")
+
+    print("<<<logincheck>>>")
+    print(f"STATUS:{status} CODE:{resp.status_code} RESPONSE:{response_text}")
+
+
+if __name__ == "__main__":
+    main()
