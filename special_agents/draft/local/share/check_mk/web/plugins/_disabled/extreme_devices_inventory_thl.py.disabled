@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Extreme Devices Inventory – THL-style (CMK 2.4)
+# Pfad ~/local/share/check_mk/web/plugins/views/
+
+from cmk.gui.i18n import _
+from cmk.gui.config import config
+
+try:
+    from cmk.gui.views.inventory.registry import inventory_displayhints
+except Exception:
+    from cmk.gui.inventory import displayhints as inventory_displayhints
+
+from cmk.gui.plugins.views.inventory import render_inv_dicttable
+
+INV_PATH_DEV = ".networking.extreme_devices:"
+
+DEFAULT_COLS_DEV = [
+    "hostname", "device_type", "model", "ip_address", "mac_address",
+    "serial", "software_version", "location", "status", "source", "device_id",
+]
+
+params_dev = getattr(config, "xiq_inventory_display_devices", None)
+if isinstance(params_dev, dict) and params_dev:
+    KEYORDER_DEV = [c for c in DEFAULT_COLS_DEV if params_dev.get(c, False)] or DEFAULT_COLS_DEV
+else:
+    KEYORDER_DEV = DEFAULT_COLS_DEV
+
+inventory_displayhints.update({
+    INV_PATH_DEV: {
+        "title": _("Extreme Network Devices"),
+        "icon": "network",
+        "render": render_inv_dicttable,
+        "view": "extreme_device_inventory",
+        "keyorder": KEYORDER_DEV,
+    },
+    f"{INV_PATH_DEV}*.device_id":        {"title": _("Device ID"), "short": _("ID")},
+    f"{INV_PATH_DEV}*.hostname":         {"title": _("Hostname"), "short": _("Hostname")},
+    f"{INV_PATH_DEV}*.serial":           {"title": _("Serial Number"), "short": _("Serial")},
+    f"{INV_PATH_DEV}*.mac_address":      {"title": _("MAC Address"), "short": _("MAC")},
+    f"{INV_PATH_DEV}*.ip_address":       {"title": _("IP Address"), "short": _("IP")},
+    f"{INV_PATH_DEV}*.model":            {"title": _("Model"), "short": _("Model")},
+    f"{INV_PATH_DEV}*.software_version": {"title": _("Software Version"), "short": _("SW Version")},
+    f"{INV_PATH_DEV}*.location":         {"title": _("Location"), "short": _("Location")},
+    f"{INV_PATH_DEV}*.device_type":      {"title": _("Device Type"), "short": _("Type"), "paint": "str"},
+    f"{INV_PATH_DEV}*.status":           {"title": _("Status"), "short": _("Status"), "paint": "str"},
+    f"{INV_PATH_DEV}*.source":           {"title": _("Source"), "short": _("Source")},
+})
