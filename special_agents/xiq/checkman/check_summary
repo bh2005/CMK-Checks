@@ -1,0 +1,28 @@
+title: XIQ Access Point Summary
+agents: special
+catalog: hw/network
+license: free
+distribution: check_mk
+description:
+ This check summarizes the main status information of an ExtremeCloudIQ
+ Access Point. The check reports the following data:
+  - Connectivity state
+  - IP address
+  - Model
+  - Firmware version
+  - Location identifier
+  - Uptime information
+  - Radio summary (2.4/5/6 GHz)
+  - Client summary
+ .
+ The check determines:
+  - OK: AP online and providing status data
+  - WARN: AP reachable but reporting degraded state
+  - CRIT: AP offline or reporting service-unavailable
+  - UNKNOWN: Missing or invalid data from the XIQ API
+
+item:
+ The Access Point name as reported from ExtremeCloudIQ.
+
+perfdata:
+ This check currently does not provide performance metrics.
