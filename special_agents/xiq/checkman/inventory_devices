@@ -1,0 +1,23 @@
+title: XIQ Access Point Inventory
+agents: special
+catalog: hw/network
+license: free
+distribution: check_mk
+description:
+ This inventory plugin collects static hardware information from
+ ExtremeCloudIQ, including:
+  - Device name
+  - Model
+  - Firmware version
+  - Serial number
+  - Location code (LOC)
+  - Hardware capabilities
+ .
+ This plugin does not produce monitoring states. It is purely for
+ inventory representation.
+
+item:
+ No item. This is an inventory-only plugin.
+
+perfdata:
+ No performance metrics.

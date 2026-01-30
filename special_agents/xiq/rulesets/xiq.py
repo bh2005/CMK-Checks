@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 from cmk.rulesets.v1 import Title, Help
 from cmk.rulesets.v1.form_specs import (

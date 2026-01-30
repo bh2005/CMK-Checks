@@ -1,4 +1,3 @@
-
 from cmk.gui.plugins.metrics import metric_info
 
 metric_info['xiq_clients_24'] = {'title': 'Clients (2.4 GHz)', 'unit': 'count'}

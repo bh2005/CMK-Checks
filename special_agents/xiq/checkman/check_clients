@@ -1,0 +1,27 @@
+title: XIQ Client Count
+agents: special
+catalog: hw/network/wifi
+license: free
+distribution: check_mk
+description:
+ This check reports the number of connected clients per SSID and per AP.
+ It evaluates:
+  - Total number of clients
+  - Clients per band (2.4 / 5 / 6 GHz)
+  - Per‑SSID association
+ .
+ State logic:
+  - OK: Client data available and within expected ranges
+  - WARN: Unusually high number of clients (threshold configurable)
+  - CRIT: Client API reports invalid or missing values
+  - UNKNOWN: No client information available
+
+item:
+ The SSID handled by the Access Point.
+
+perfdata:
+ Creates metrics:
+  - total_clients
+  - clients_24
+  - clients_5
+  - clients_6
