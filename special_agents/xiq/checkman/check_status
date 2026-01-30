@@ -1,0 +1,26 @@
+title: XIQ Access Point Status Detail
+agents: special
+catalog: hw/network
+license: free
+distribution: check_mk
+description:
+ This check provides detailed status information for an ExtremeCloudIQ
+ Access Point. The check reports:
+  - Operational state
+  - Network status (LAN / WAN / CAPWAP)
+  - Firmware version
+  - Serial number
+  - Location information (LOC code)
+  - BSSID per radio
+ .
+ The state is derived from:
+  - OK: AP connected and operational
+  - WARN: AP connected but degraded (missing radios, reduced service)
+  - CRIT: AP disconnected or unreachable
+  - UNKNOWN: Missing API fields or malformed data
+
+item:
+ The Access Point name as provided by XIQ.
+
+perfdata:
+ This check does not generate performance metrics.

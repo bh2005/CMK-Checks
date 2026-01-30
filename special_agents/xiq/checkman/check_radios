@@ -1,0 +1,25 @@
+title: XIQ Radio Information
+agents: special
+catalog: hw/network/wifi
+license: free
+distribution: check_mk
+description:
+ This check monitors the individual radio interfaces (2.4 GHz, 5 GHz,
+ 6 GHz) of an ExtremeCloudIQ Access Point. It extracts:
+  - Radio operational state
+  - Channel and channel width
+  - Transmit power
+  - Number of clients per radio
+ .
+ The state is determined as follows:
+  - OK: Radio enabled and operational
+  - WARN: Radio enabled but reporting degraded condition
+  - CRIT: Radio disabled although AP is online
+  - UNKNOWN: Radio information missing
+
+item:
+ A combination of Access Point name and radio band
+ (e.g. "AP1234 5GHz").
+
+perfdata:
+ Provides client count per radio band.
