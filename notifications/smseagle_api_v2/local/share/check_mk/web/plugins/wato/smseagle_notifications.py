@@ -1,275 +1,230 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-WATO GUI Integration for SMSEagle Notification Plugin
+CheckMK 2.4 Ruleset for SMSEagle API v2 Notification Plugin
 
-Provides configuration interface in Check_MK GUI for SMSEagle notifications.
+Uses the NEW Ruleset API v1 — compatible with CheckMK 2.4+.
+The old cmk.gui.valuespec / cmk.gui.plugins.wato.utils approach
+is deprecated since 2.3 and broken in 2.4.
 
-Install to: local/share/check_mk/web/plugins/wato/smseagle_notifications.py
+Install to:
+    local/lib/python3/cmk_addons/plugins/smseagle_api_v2/rulesets/ruleset_smseagle_api_v2.py
+
+The notification script itself goes to:
+    local/share/check_mk/notifications/smseagle_api_v2
+
+NOTE: Do NOT re-register the 'pager' user attribute — it is a built-in
+CheckMK field. Users configure their phone number / contact / group IDs
+there directly.
 """
 
-from cmk.gui.i18n import _
-from cmk.gui.valuespec import (
-    Alternative,
-    CascadingDropdown,
+from cmk.rulesets.v1 import Help, Label, Title
+from cmk.rulesets.v1.form_specs import (
+    BooleanChoice,
+    CascadingSingleChoice,
+    CascadingSingleChoiceElement,
+    DefaultValue,
+    DictElement,
     Dictionary,
-    DropdownChoice,
     FixedValue,
     Integer,
-    ListOfStrings,
+    MultilineText,
     Password,
-    TextInput,
-    TextAreaUnicode,
-    Tuple,
+    String,
+    migrate_to_password,
 )
-from cmk.gui.plugins.wato.utils import (
-    notification_parameter_registry,
-    NotificationParameter,
-)
+from cmk.rulesets.v1.rule_specs import NotificationParameters, Topic
 
 
-@notification_parameter_registry.register
-class NotificationParameterSMSEagle(NotificationParameter):
-    @property
-    def ident(self) -> str:
-        return "smseagle"
+# ---------------------------------------------------------------------------
+# Helper: individual form sections
+# ---------------------------------------------------------------------------
 
-    @property
-    def spec(self):
-        return Dictionary(
-            title=_("Create notification via SMSEagle"),
-            help=_(
-                "Send notifications via SMSEagle device using SMS, TTS calls, or Wave files. "
-                "Supports automatic failover to a secondary SMSEagle device."
+def _primary_server_elements() -> dict:
+    return {
+        "primary_url": DictElement(
+            parameter_form=String(
+                title=Title("Primary SMSEagle URL"),
+                help_text=Help(
+                    "Base URL of your primary SMSEagle device. "
+                    "Example: http://192.168.1.100  or  https://smseagle.company.com"
+                ),
+                prefill=DefaultValue("http://"),
             ),
-            optional_keys=[
-                "secondary_url",
-                "secondary_token",
-                "message_template",
-                "verify_ssl",
-            ],
-            elements=[
-                # Primary Server Configuration
-                (
-                    "primary_url",
-                    TextInput(
-                        title=_("Primary SMSEagle URL"),
-                        help=_(
-                            "Base URL of your primary SMSEagle device. "
-                            "Example: http://192.168.1.100 or https://smseagle.company.com"
-                        ),
-                        size=50,
-                        allow_empty=False,
-                        regex="^https?://.*",
-                        regex_error=_("URL must start with http:// or https://"),
-                    ),
+            required=True,
+        ),
+        "primary_token": DictElement(
+            parameter_form=Password(
+                title=Title("Primary Access Token"),
+                help_text=Help(
+                    "API access token for the primary SMSEagle device. "
+                    "Generate in SMSEagle web interface: Users → Access to API → Generate new token"
                 ),
-                (
-                    "primary_token",
-                    Password(
-                        title=_("Primary Access Token"),
-                        help=_(
-                            "API access token for the primary SMSEagle device. "
-                            "Generate this in SMSEagle web interface: Settings → API → Access Tokens"
-                        ),
-                        allow_empty=False,
-                    ),
-                ),
-                
-                # Secondary Server (Failover)
-                (
-                    "secondary_url",
-                    TextInput(
-                        title=_("Secondary SMSEagle URL (optional)"),
-                        help=_(
-                            "Base URL of your secondary/backup SMSEagle device. "
-                            "Will be used if primary device fails."
-                        ),
-                        size=50,
-                        regex="^https?://.*",
-                        regex_error=_("URL must start with http:// or https://"),
-                    ),
-                ),
-                (
-                    "secondary_token",
-                    Password(
-                        title=_("Secondary Access Token (optional)"),
-                        help=_("API access token for the secondary SMSEagle device"),
-                    ),
-                ),
-                
-                # Message Type and Configuration
-                (
-                    "message_type",
-                    CascadingDropdown(
-                        title=_("Message Type"),
-                        help=_("Choose how to send the notification"),
-                        choices=[
-                            (
-                                "sms",
-                                _("SMS Text Message"),
-                                FixedValue(
-                                    None,
-                                    help=_("Send notification as SMS text message"),
-                                    totext=_("Standard SMS"),
-                                ),
-                            ),
-                            (
-                                "call_tts",
-                                _("Voice Call (Text-to-Speech)"),
-                                FixedValue(
-                                    None,
-                                    help=_("Call recipient and read message using text-to-speech"),
-                                    totext=_("TTS Voice Call"),
-                                ),
-                            ),
-                            (
-                                "wave",
-                                _("Voice Call (WAV File)"),
-                                Integer(
-                                    title=_("Wave File ID"),
-                                    help=_(
-                                        "ID of the WAV file stored in SMSEagle. "
-                                        "Upload WAV files in SMSEagle: Settings → Soundboard"
-                                    ),
-                                    minvalue=1,
-                                ),
-                            ),
-                        ],
-                        default_value="sms",
-                    ),
-                ),
-                
-                # Modem Configuration
-                (
-                    "modem_no",
-                    Integer(
-                        title=_("Modem Number"),
-                        help=_(
-                            "Which modem to use for sending (1-4). "
-                            "Check your SMSEagle device for available modems."
-                        ),
-                        default_value=1,
-                        minvalue=1,
-                        maxvalue=4,
-                    ),
-                ),
-                
-                # SSL Verification
-                (
-                    "verify_ssl",
-                    DropdownChoice(
-                        title=_("SSL Certificate Verification"),
-                        help=_(
-                            "Enable or disable SSL certificate verification. "
-                            "Disable only if using self-signed certificates (not recommended for production)"
-                        ),
-                        choices=[
-                            (True, _("Enable (recommended)")),
-                            (False, _("Disable (insecure)")),
-                        ],
-                        default_value=True,
-                    ),
-                ),
-                
-                # Custom Message Template
-                (
-                    "message_template",
-                    TextAreaUnicode(
-                        title=_("Custom Message Template"),
-                        help=_(
-                            "Customize the notification message using Check_MK variables. "
-                            "Leave empty to use default format. Available variables:<br>"
-                            "<ul>"
-                            "<li><tt>$HOSTNAME$</tt> - Host name</li>"
-                            "<li><tt>$HOSTALIAS$</tt> - Host alias</li>"
-                            "<li><tt>$HOSTADDRESS$</tt> - Host IP address</li>"
-                            "<li><tt>$HOSTSTATE$</tt> - Host state (UP, DOWN, etc.)</li>"
-                            "<li><tt>$HOSTSHORTSTATE$</tt> - Short host state (U, D, etc.)</li>"
-                            "<li><tt>$HOSTOUTPUT$</tt> - Host check output</li>"
-                            "<li><tt>$SERVICEDESC$</tt> - Service description</li>"
-                            "<li><tt>$SERVICESTATE$</tt> - Service state (OK, WARNING, etc.)</li>"
-                            "<li><tt>$SERVICESHORTSTATE$</tt> - Short service state (O, W, C, U)</li>"
-                            "<li><tt>$SERVICEOUTPUT$</tt> - Service check output</li>"
-                            "<li><tt>$NOTIFICATIONTYPE$</tt> - Type (PROBLEM, RECOVERY, etc.)</li>"
-                            "</ul>"
-                        ),
-                        rows=4,
-                        cols=60,
-                        monospaced=True,
-                    ),
-                ),
-            ],
-        )
-
-
-# =============================================================================
-# User Attribute for Pager Field (Recipient Configuration)
-# =============================================================================
-
-# This provides a nice interface for configuring recipients per user
-# Install to same file or separate file in: local/share/check_mk/web/plugins/wato/
-
-from cmk.gui.plugins.userdb.utils import (
-    user_attribute_registry,
-    UserAttribute,
-)
-
-@user_attribute_registry.register
-class SMSEaglePagerAttribute(UserAttribute):
-    @property
-    def name(self):
-        return "pager"
-    
-    @property  
-    def valuespec(self):
-        return TextInput(
-            title=_("Pager / SMS Number"),
-            help=_(
-                "Configure how to reach this user via SMSEagle. Supported formats:<br>"
-                "<ul>"
-                "<li><b>Phone number:</b> <tt>+491234567890</tt></li>"
-                "<li><b>SMSEagle contacts:</b> <tt>contacts:12,15</tt></li>"
-                "<li><b>SMSEagle groups:</b> <tt>groups:1,2</tt></li>"
-                "<li><b>Combination:</b> <tt>+491234567890;groups:1</tt> (semicolon separated)</li>"
-                "</ul>"
-                "Examples:<br>"
-                "<tt>+491234567890</tt> - Send to phone number<br>"
-                "<tt>contacts:12,15</tt> - Send to SMSEagle contact IDs 12 and 15<br>"
-                "<tt>groups:1</tt> - Send to all members of SMSEagle group 1<br>"
-                "<tt>+491234567890;groups:1</tt> - Send to phone AND group"
+                migrate=migrate_to_password,
             ),
-            size=50,
-        )
+            required=True,
+        ),
+    }
 
 
-# =============================================================================
-# Example Notification Rule Configuration
-# =============================================================================
+def _secondary_server_elements() -> dict:
+    return {
+        "secondary_url": DictElement(
+            parameter_form=String(
+                title=Title("Secondary SMSEagle URL (Failover)"),
+                help_text=Help(
+                    "Optional: Base URL of your backup SMSEagle device. "
+                    "Will be tried automatically if the primary device fails."
+                ),
+                prefill=DefaultValue("http://"),
+            ),
+            required=False,
+        ),
+        "secondary_token": DictElement(
+            parameter_form=Password(
+                title=Title("Secondary Access Token"),
+                help_text=Help("API access token for the secondary/failover SMSEagle device."),
+                migrate=migrate_to_password,
+            ),
+            required=False,
+        ),
+    }
 
-"""
-After installing, create a notification rule in WATO:
 
-Setup → Notifications → Add rule
+def _message_type_element() -> dict:
+    return {
+        "message_type": DictElement(
+            parameter_form=CascadingSingleChoice(
+                title=Title("Message Type"),
+                help_text=Help("Choose how the notification is delivered via SMSEagle."),
+                elements=[
+                    CascadingSingleChoiceElement(
+                        name="sms",
+                        title=Title("SMS Text Message"),
+                        parameter_form=FixedValue(
+                            value=None,
+                            label=Label("Send notification as plain SMS"),
+                        ),
+                    ),
+                    CascadingSingleChoiceElement(
+                        name="call_tts",
+                        title=Title("Voice Call — Text-to-Speech (TTS Advanced)"),
+                        parameter_form=Integer(
+                            title=Title("TTS Voice Model ID"),
+                            help_text=Help(
+                                "ID of the TTS voice model to use. "
+                                "Check available models in SMSEagle under: Calls → TTS Voice models. "
+                                "Common values: 1 = default English voice."
+                            ),
+                            prefill=DefaultValue(1),
+                        ),
+                    ),
+                    CascadingSingleChoiceElement(
+                        name="wave",
+                        title=Title("Voice Call — WAV File"),
+                        parameter_form=Integer(
+                            title=Title("WAV File ID"),
+                            help_text=Help(
+                                "ID of the WAV file stored on the SMSEagle device. "
+                                "Upload files under: Settings → Soundboard."
+                            ),
+                            prefill=DefaultValue(1),
+                        ),
+                    ),
+                ],
+                prefill=DefaultValue("sms"),
+            ),
+            required=True,
+        ),
+    }
 
-Configuration:
-1. Notification Method: SMSEagle
-2. Primary SMSEagle URL: http://192.168.1.100
-3. Primary Access Token: your-token-here
-4. Message Type: SMS Text Message
-5. Modem Number: 1
 
-6. Conditions:
-   - Contact selection: All contacts
-   - Or: Specific contacts with pager field set
-   
-7. Custom Message Template (example):
-   Alert: $HOSTNAME$ $SERVICEDESC$ is $SERVICESTATE$
-   Output: $SERVICEOUTPUT$
+def _modem_element() -> dict:
+    return {
+        "modem_no": DictElement(
+            parameter_form=Integer(
+                title=Title("Modem Number"),
+                help_text=Help(
+                    "Which modem slot to use for sending (1–4). "
+                    "Check your SMSEagle hardware for the available number of modems."
+                ),
+                prefill=DefaultValue(1),
+            ),
+            required=False,
+        ),
+    }
 
-Users Configuration:
-Setup → Users → Edit user → Pager field:
-   +491234567890
-   or
-   contacts:12;groups:1
-"""
+
+def _ssl_element() -> dict:
+    return {
+        "verify_ssl": DictElement(
+            parameter_form=BooleanChoice(
+                title=Title("Verify SSL Certificate"),
+                label=Label("Enable SSL certificate verification (recommended)"),
+                help_text=Help(
+                    "Disable only when using self-signed certificates. "
+                    "Disabling this is a security risk — do not use in production."
+                ),
+                prefill=DefaultValue(True),
+            ),
+            required=False,
+        ),
+    }
+
+
+def _template_element() -> dict:
+    return {
+        "message_template": DictElement(
+            parameter_form=MultilineText(
+                title=Title("Custom Message Template"),
+                help_text=Help(
+                    "Optional: Customise the notification message using CheckMK variables. "
+                    "Leave empty to use the default format. "
+                    "Available variables (without NOTIFY_ prefix, wrapped in $...$): "
+                    "HOSTNAME, HOSTALIAS, HOSTADDRESS, HOSTSTATE, HOSTSHORTSTATE, HOSTOUTPUT, "
+                    "SERVICEDESC, SERVICESTATE, SERVICESHORTSTATE, SERVICEOUTPUT, NOTIFICATIONTYPE. "
+                    "Example: [$NOTIFICATIONTYPE$] $HOSTNAME$/$SERVICEDESC$ is $SERVICESTATE$: $SERVICEOUTPUT$"
+                ),
+                monospaced=True,
+                prefill=DefaultValue(""),
+            ),
+            required=False,
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Main form factory
+# ---------------------------------------------------------------------------
+
+def _notification_form() -> Dictionary:
+    return Dictionary(
+        title=Title("SMSEagle API v2 — Notification Settings"),
+        help_text=Help(
+            "Send CheckMK notifications via an SMSEagle hardware SMS gateway using API v2. "
+            "Supports SMS, Text-to-Speech calls, and WAV-file calls. "
+            "An optional secondary device can be configured as automatic failover."
+        ),
+        elements={
+            **_primary_server_elements(),
+            **_secondary_server_elements(),
+            **_message_type_element(),
+            **_modem_element(),
+            **_ssl_element(),
+            **_template_element(),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rule spec registration  (this is what CheckMK 2.4 discovers automatically)
+# ---------------------------------------------------------------------------
+
+rule_spec_smseagle_api_v2 = NotificationParameters(
+    # 'name' must match the filename of the notification script
+    # (local/share/check_mk/notifications/smseagle_api_v2)
+    name="smseagle_api_v2",
+    title=Title("SMSEagle API v2"),
+    topic=Topic.NOTIFICATIONS,
+    parameter_form=_notification_form,
+)
