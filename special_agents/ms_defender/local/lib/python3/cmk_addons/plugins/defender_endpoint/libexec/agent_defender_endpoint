@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Special Agent: Microsoft Defender for Endpoint
+Ablage: ~/local/lib/python3/cmk_addons/plugins/defender_endpoint/libexec/agent_defender_endpoint
+
+Aufruf durch Check_MK (via server_side_calls):
+  agent_defender_endpoint --tenant-id <ID> --client-id <ID> --client-secret <SECRET>
+"""
+
+import argparse
+import sys
+from datetime import datetime, timezone
+
+try:
+    import requests
+except ImportError:
+    sys.stderr.write("FEHLER: Python-Modul 'requests' fehlt. pip3 install requests\n")
+    sys.exit(1)
+
+DEFENDER_API_BASE  = "https://api.security.microsoft.com"
+TOKEN_URL_TEMPLATE = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+SCOPE              = "https://api.security.microsoft.com/.default"
+MAX_ALERTS         = 100
+ALERT_STATUSES     = ["New", "InProgress"]
+
+
+def get_token(tenant_id: str, client_id: str, client_secret: str) -> str:
+    url = TOKEN_URL_TEMPLATE.format(tenant_id=tenant_id)
+    payload = {
+        "client_id":     client_id,
+        "client_secret": client_secret,
+        "scope":         SCOPE,
+        "grant_type":    "client_credentials",
+    }
+    try:
+        resp = requests.post(url, data=payload, timeout=30)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        sys.stderr.write(f"FEHLER Token-Abruf: {e}\n")
+        sys.exit(1)
+
+    data = resp.json()
+    if "access_token" not in data:
+        sys.stderr.write(f"FEHLER: Kein access_token: {data}\n")
+        sys.exit(1)
+    return data["access_token"]
+
+
+def get_alerts(token: str) -> list:
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    status_filter = " or ".join([f"status eq '{s}'" for s in ALERT_STATUSES])
+    params = {
+        "$filter":  status_filter,
+        "$top":     MAX_ALERTS,
+        "$orderby": "alertCreationTime desc",
+    }
+    try:
+        resp = requests.get(
+            f"{DEFENDER_API_BASE}/api/alerts",
+            headers=headers,
+            params=params,
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        sys.stderr.write(f"FEHLER Alert-Abruf: {e}\n")
+        sys.exit(1)
+    return resp.json().get("value", [])
+
+
+def format_age(creation_time_str: str) -> str:
+    try:
+        created = datetime.fromisoformat(creation_time_str.replace("Z", "+00:00"))
+        delta   = datetime.now(timezone.utc) - created
+        hours   = int(delta.total_seconds() // 3600)
+        minutes = int((delta.total_seconds() % 3600) // 60)
+        return f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+    except Exception:
+        return "unbekannt"
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Check_MK Special Agent: Microsoft Defender for Endpoint")
+    parser.add_argument("--tenant-id",     required=True)
+    parser.add_argument("--client-id",     required=True)
+    parser.add_argument("--client-secret", required=True)
+    args = parser.parse_args()
+
+    token  = get_token(args.tenant_id, args.client_id, args.client_secret)
+    alerts = get_alerts(token)
+
+    # Agent-Section ausgeben
+    print("<<<defender_endpoint_alerts:sep(124)>>>")
+
+    # Zeile 1: Gesamtstatistik
+    counts = {"High": 0, "Medium": 0, "Low": 0, "Informational": 0}
+    for a in alerts:
+        sev = a.get("severity", "Informational")
+        counts[sev] = counts.get(sev, 0) + 1
+
+    print(
+        f"SUMMARY|{counts['High']}|{counts['Medium']}"
+        f"|{counts['Low']}|{counts['Informational']}|{len(alerts)}"
+    )
+
+    # Zeile pro Alert
+    for a in alerts:
+        print("|".join([
+            "ALERT",
+            a.get("id", ""),
+            a.get("severity", "Informational"),
+            a.get("status", ""),
+            a.get("computerDnsName", "Unbekannt").replace("|", "-"),
+            a.get("title", "").replace("|", "-"),
+            a.get("category", "").replace("|", "-"),
+            format_age(a.get("alertCreationTime", "")),
+            ",".join(a.get("mitreTechniques", [])),
+            (a.get("threatFamilyName") or "").replace("|", "-"),
+        ]))
+
+
+if __name__ == "__main__":
+    main()
