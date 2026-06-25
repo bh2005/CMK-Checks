@@ -1,0 +1,11 @@
+{'author': 'Bernd Holzhauer',
+ 'description': 'Custom Notes Editor for CMK 2.5.',
+ 'download_url': '',
+ 'files': {'web': ['plugins/pages/custom_notes_editor.py',
+                   'plugins/views/paint_custom_notes.py']},
+ 'name': 'custom_notes_editor',
+ 'title': 'Custom Notes Editor',
+ 'version': '2.5.3',
+ 'version.min_required': '2.5.0p1',
+ 'version.packaged': '2.5.0p7',
+ 'version.usable_until': None}
