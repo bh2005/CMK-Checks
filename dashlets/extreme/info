@@ -1,0 +1,11 @@
+{'author': 'Bernd Holzhauer',
+ 'description': 'Extreme AP Overview Dashlet for CMK 2.5 (IFrameDashlet + content page).',
+ 'download_url': '',
+ 'files': {'gui': ['dashboard/extreme_ap_dashboard.py'],
+           'web': ['plugins/pages/extreme_ap_content.py']},
+ 'name': 'extreme_ap_dashboard',
+ 'title': 'Extreme AP Dashboard',
+ 'version': '2.5.0',
+ 'version.min_required': '2.5.0p1',
+ 'version.packaged': '2.5.0p7',
+ 'version.usable_until': None}

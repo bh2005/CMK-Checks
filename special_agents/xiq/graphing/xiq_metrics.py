@@ -8,7 +8,7 @@ verwendet werden. Farben/Titel sind konsistent fuer NOC-Dashboards.
 
 Pfad: ~/local/lib/check_mk/graphing/xiq_summary/metrics.py
 """
-from cmk.graphing.v1 import metrics
+from cmk.graphing.v1 import metrics, unit
 
 # --------------------------------------------------------------------
 # Einheit: Ganzzahl (count) ohne Nachkommastellen
@@ -79,4 +79,107 @@ metric_xiq_api_remaining = metrics.Metric(
     title=metrics.Title("API Requests verbleibend"),
     unit=UNIT_COUNTER,
     color=metrics.Color.DARK_BLUE,
+)
+
+# --------------------------------------------------------------------
+# Uptime
+# --------------------------------------------------------------------
+metric_xiq_uptime_seconds = metrics.Metric(
+    name="xiq_uptime_seconds",
+    title=metrics.Title("Uptime"),
+    unit=unit.SECOND,
+    color=metrics.Color.BLUE,
+)
+
+metric_xiq_uptime_days = metrics.Metric(
+    name="xiq_uptime_days",
+    title=metrics.Title("Uptime (Tage)"),
+    unit=metrics.Unit(metrics.DecimalNotation("d"), metrics.AutoPrecision(0)),
+    color=metrics.Color.BLUE,
+)
+
+# --------------------------------------------------------------------
+# SSID-Clients
+# --------------------------------------------------------------------
+metric_xiq_ssid_clients_total = metrics.Metric(
+    name="xiq_ssid_clients_total",
+    title=metrics.Title("SSID Clients (gesamt)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.GREEN,
+)
+
+metric_xiq_ssid_clients_24 = metrics.Metric(
+    name="xiq_ssid_clients_24",
+    title=metrics.Title("SSID Clients (2.4 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.LIGHT_GREEN,
+)
+
+metric_xiq_ssid_clients_5 = metrics.Metric(
+    name="xiq_ssid_clients_5",
+    title=metrics.Title("SSID Clients (5 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.ORANGE,
+)
+
+metric_xiq_ssid_clients_6 = metrics.Metric(
+    name="xiq_ssid_clients_6",
+    title=metrics.Title("SSID Clients (6 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.RED,
+)
+
+# --------------------------------------------------------------------
+# Radio-Clients
+# --------------------------------------------------------------------
+metric_xiq_radio_clients_total = metrics.Metric(
+    name="xiq_radio_clients_total",
+    title=metrics.Title("Radio Clients (gesamt)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.GREEN,
+)
+
+metric_xiq_radio_clients_24 = metrics.Metric(
+    name="xiq_radio_clients_24",
+    title=metrics.Title("Radio Clients (2.4 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.LIGHT_GREEN,
+)
+
+metric_xiq_radio_clients_5 = metrics.Metric(
+    name="xiq_radio_clients_5",
+    title=metrics.Title("Radio Clients (5 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.ORANGE,
+)
+
+metric_xiq_radio_clients_6 = metrics.Metric(
+    name="xiq_radio_clients_6",
+    title=metrics.Title("Radio Clients (6 GHz)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.RED,
+)
+
+# --------------------------------------------------------------------
+# Radio Power & Channels
+# --------------------------------------------------------------------
+metric_xiq_radio_power_avg_dbm = metrics.Metric(
+    name="xiq_radio_power_avg_dbm",
+    title=metrics.Title("Radio Power (Ø, dBm)"),
+    unit=metrics.Unit(metrics.DecimalNotation("dBm"), metrics.AutoPrecision(0)),
+    color=metrics.Color.PURPLE,
+)
+
+metric_xiq_radio_power_min_dbm = metrics.Metric(
+    name="xiq_radio_power_min_dbm",
+    title=metrics.Title("Radio Power (min, dBm)"),
+    unit=metrics.Unit(metrics.DecimalNotation("dBm"), metrics.AutoPrecision(0)),
+    color=metrics.Color.DARK_PURPLE,
+)
+
+metric_xiq_radio_channels_count = metrics.Metric(
+    name="xiq_radio_channels_count",
+    title=metrics.Title("Radio Channels (distinct)"),
+    unit=UNIT_COUNTER,
+    color=metrics.Color.GRAY,
 )
