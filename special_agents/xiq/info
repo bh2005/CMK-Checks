@@ -1,5 +1,5 @@
 {'author': 'Bernd Holzhauer',
- 'description': 'Special Agent: agent_xiq (ExtremeCloudIQ -> Checkmk). v0.4.2: Fix 401/4xx HTTP errors.',
+ 'description': 'Special Agent: agent_xiq (ExtremeCloudIQ -> Checkmk). v0.4.4: fix radio-information (limit 50, paging via total_pages), probe without invalid views param, API usage service.',
  'download_url': 'https://github.com/bh2005/CMK-exchange',
  'files': {'cmk_addons_plugins': ['xiq/graphing/xiq_graphs.py',
                                    'xiq/graphing/xiq_metrics.py',
@@ -40,7 +40,7 @@
                                    'xiq/rulesets/xiq_ssid_clients_levels.py']},
  'name': 'xiq_cloud_agent',
  'title': 'Special Agent XIQ Cloud',
- 'version': '0.4.2',
+ 'version': '0.4.4',
  'version.min_required': '2.4.0p08',
  'version.packaged': '2.5.0p7',
  'version.usable_until': None}
