@@ -38,7 +38,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple, Iterable
@@ -164,6 +166,118 @@ def _cache_save(cf: str, token: str) -> None:
 # ---------------------------------------------------------------------
 # HTTP JSON – with retries, backoff, and 401/429 handling
 # ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# API usage statistics – count every HTTP request of this run
+# (retries and 429 included, each one consumes quota) and remember the
+# "RateLimit: "<policy>";r=<remaining>" header XIQ sends on responses.
+# ---------------------------------------------------------------------
+_START_TS = time.time()
+_STATS_LOCK = threading.Lock()
+_API_STATS: Dict[str, Any] = {
+    "calls": 0,
+    "calls_429": 0,
+    "calls_error": 0,       # HTTP >= 400 except 429
+    "by_endpoint": {},      # path (without query) -> count
+    "rl_first": None,       # first "remaining" seen in this run
+    "rl_last": None,        # most recent "remaining" seen
+    "rl_min": None,         # lowest "remaining" seen
+    "rl_reset": None,       # seconds until window reset (t=), if sent
+    "rl_policy": None,      # e.g. "tenant-hour"
+    "rl_limit": None,       # quota (q=) from RateLimit-Policy, if sent
+    "rl_window": None,      # window seconds (w=) from RateLimit-Policy, if sent
+}
+
+
+def _parse_structured_ratelimit(hdr: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Parse the IETF structured RateLimit headers XIQ uses, e.g.
+      RateLimit: "tenant-hour";r=6529;t=1234
+      RateLimit-Policy: "tenant-hour";q=7500;w=3600
+    Keys of `hdr` must be lower-case. Missing parts stay None.
+    """
+    out: Dict[str, Any] = {"policy": None, "remaining": None, "reset": None,
+                           "limit": None, "window": None}
+    rl = hdr.get("ratelimit") or ""
+    m = re.match(r'\s*"?([^";]+)"?', rl)
+    if m and ("r=" in rl or "t=" in rl):
+        out["policy"] = m.group(1).strip()
+    m = re.search(r"(?:^|;)\s*r=(\d+)", rl)
+    if m:
+        out["remaining"] = int(m.group(1))
+    m = re.search(r"(?:^|;)\s*t=(\d+)", rl)
+    if m:
+        out["reset"] = int(m.group(1))
+    pol = hdr.get("ratelimit-policy") or ""
+    m = re.search(r"(?:^|;)\s*q=(\d+)", pol)
+    if m:
+        out["limit"] = int(m.group(1))
+    m = re.search(r"(?:^|;)\s*w=(\d+)", pol)
+    if m:
+        out["window"] = int(m.group(1))
+    return out
+
+
+def _stats_record(path: str, resp: Any) -> None:
+    """Count one HTTP request (resp may be None if it never got a response)."""
+    endpoint = (path or "").split("?", 1)[0] or "/"
+    with _STATS_LOCK:
+        _API_STATS["calls"] += 1
+        eps = _API_STATS["by_endpoint"]
+        eps[endpoint] = eps.get(endpoint, 0) + 1
+        if resp is None:
+            return
+        code = getattr(resp, "status_code", 0) or 0
+        if code == 429:
+            _API_STATS["calls_429"] += 1
+        elif code >= 400:
+            _API_STATS["calls_error"] += 1
+        try:
+            hdr = {k.lower(): v for k, v in dict(resp.headers).items()}
+        except Exception:
+            return
+        info = _parse_structured_ratelimit(hdr)
+        if info["policy"]:
+            _API_STATS["rl_policy"] = info["policy"]
+        if info["limit"] is not None:
+            _API_STATS["rl_limit"] = info["limit"]
+        if info["window"] is not None:
+            _API_STATS["rl_window"] = info["window"]
+        if info["reset"] is not None:
+            _API_STATS["rl_reset"] = info["reset"]
+        rem = info["remaining"]
+        if rem is not None:
+            if _API_STATS["rl_first"] is None:
+                _API_STATS["rl_first"] = rem
+            _API_STATS["rl_last"] = rem
+            if _API_STATS["rl_min"] is None or rem < _API_STATS["rl_min"]:
+                _API_STATS["rl_min"] = rem
+
+
+def print_api_usage_section() -> None:
+    """Emit <<<extreme_cloud_iq_api_usage:sep(124)>>> (main host section)."""
+    with _STATS_LOCK:
+        st = dict(_API_STATS)
+        eps = dict(st["by_endpoint"])
+    print("<<<extreme_cloud_iq_api_usage:sep(124)>>>")
+    print(f"calls_total|{st['calls']}")
+    print(f"calls_429|{st['calls_429']}")
+    print(f"calls_error|{st['calls_error']}")
+    print(f"duration_s|{int(time.time() - _START_TS)}")
+    for key, name in (
+        ("rl_policy", "policy"),
+        ("rl_first", "remaining_first"),
+        ("rl_last", "remaining_last"),
+        ("rl_min", "remaining_min"),
+        ("rl_reset", "reset_in_seconds"),
+        ("rl_limit", "limit"),
+        ("rl_window", "window_s"),
+    ):
+        if st[key] is not None:
+            print(f"{name}|{st[key]}")
+    for ep, cnt in sorted(eps.items(), key=lambda kv: (-kv[1], kv[0])):
+        print(f"endpoint|{ep}|{cnt}")
+
+
 def api_login(
     base_url: str,
     username: str,
@@ -179,6 +293,7 @@ def api_login(
         json={"username": username, "password": password},
         timeout=timeout,
     )
+    _stats_record("/login", r)
     r.raise_for_status()
     token = r.json().get("access_token")
     if not token:
@@ -216,6 +331,7 @@ def api_request_json(
             s = _mk_session(verify, proxy)
             headers = {"Authorization": f"Bearer {token}"}
             r = s.request(method, url, headers=headers, params=params, timeout=timeout)
+            _stats_record(path, r)
 
             if r.status_code == 401:
                 return "RELOGIN", None, r
@@ -295,6 +411,19 @@ def _rate_limit_from_resp(resp) -> Dict[str, Any]:
     remaining_val = _to_int_safe_str(raw_remaining)
     reset_val = _to_int_safe_str(raw_reset)
 
+    # XIQ sends the structured form  RateLimit: "tenant-hour";r=<remaining>
+    # (+ optionally RateLimit-Policy: ...;q=<limit>;w=<window>) instead of
+    # the classic RateLimit-Limit/-Remaining/-Reset headers.
+    structured = _parse_structured_ratelimit(hdr)
+    if remaining_val is None:
+        remaining_val = structured["remaining"]
+    if reset_val is None:
+        reset_val = structured["reset"]
+    if limit_val is None:
+        limit_val = structured["limit"]
+    if window_s is None:
+        window_s = structured["window"]
+
     info = {
         "state": "OK",
         "limit": limit_val,
@@ -329,6 +458,7 @@ def _rate_limit_try_paths_raw(
         url = f"{base_url.rstrip('/')}{path}"
         try:
             r = s.get(url, headers=headers, timeout=timeout, allow_redirects=False)
+            _stats_record(path, r)
             if r.status_code == 401:
                 return False, {"state": "RELOGIN", "status_code": r.status_code}
             info = _rate_limit_from_resp(r)
@@ -337,8 +467,8 @@ def _rate_limit_try_paths_raw(
         except Exception as e:
             return False, {"state": "NO_RESPONSE", "error": str(e)}
 
-    # 1) /devices?page=1&limit=1&views=ID&async=false
-    ok1, info1 = _probe("/devices?page=1&limit=1&views=ID&async=false")
+    # 1) /devices?page=1&limit=1&async=false  ('views=ID' is invalid -> HTTP 400)
+    ok1, info1 = _probe("/devices?page=1&limit=1&async=false")
     if ok1:
         return True, info1
     if info1.get("state") == "RELOGIN":
@@ -382,7 +512,7 @@ def fetch_rate_limits(
             timeout,
             verify,
             proxy,
-            params={"page": 1, "limit": 1, "views": "ID", "async": "false"},
+            params={"page": 1, "limit": 1, "async": "false"},
         )
         if resp is not None:
             return True, _rate_limit_from_resp(resp)
@@ -566,6 +696,10 @@ def get_radio_information_for_device(
     return []
 
 
+# XIQ: GET /devices/radio-information rejects limit > 50 with HTTP 400
+RADIO_PAGE_LIMIT = 50
+
+
 def get_radio_information_all_batched(
     base_url: str,
     token: str,
@@ -573,10 +707,13 @@ def get_radio_information_all_batched(
     verify: bool,
     proxy: Optional[str],
     device_ids: List[int],
-    batch_size: int = 20,
+    batch_size: int = RADIO_PAGE_LIMIT,
 ) -> Dict[int, List[Dict[str, Any]]]:
     """
-    Fetch radio info for all APs in batches of batch_size (default 20).
+    Fetch radio info for all APs in batches of batch_size.
+    The XIQ API allows at most 50 items per page for this endpoint
+    (limit > 50 -> HTTP 400), so batch_size is capped at 50 and further
+    pages are requested if a batch returns a full page.
     Returns {device_id: [radios]}.
     On RELOGIN returns {"_relogin": True}.
     """
@@ -584,32 +721,48 @@ def get_radio_information_all_batched(
     if not device_ids:
         return result
 
+    batch_size = max(1, min(batch_size, RADIO_PAGE_LIMIT))
+
     for i in range(0, len(device_ids), batch_size):
         batch = device_ids[i : i + batch_size]
 
-        params: List[Tuple[str, Any]] = [("page", 1), ("limit", 500), ("async", "false")]
-        for did in batch:
-            params.append(("deviceIds", str(did)))
+        for page in range(1, 6):  # safety cap: 5 pages per batch
+            params: List[Tuple[str, Any]] = [
+                ("page", page), ("limit", RADIO_PAGE_LIMIT), ("async", "false")
+            ]
+            for did in batch:
+                params.append(("deviceIds", str(did)))
 
-        status, payload, _ = api_request_json(
-            base_url, "/devices/radio-information", token, timeout, verify, proxy, params=params
-        )
-        if status == "RELOGIN":
-            return {"_relogin": True}  # type: ignore[return-value]
-        if status != "OK" or not payload:
-            continue
+            status, payload, _ = api_request_json(
+                base_url, "/devices/radio-information", token, timeout, verify, proxy, params=params
+            )
+            if status == "RELOGIN":
+                return {"_relogin": True}  # type: ignore[return-value]
+            if status != "OK" or not payload:
+                break
 
-        data = payload.get("data", []) if isinstance(payload, dict) else payload
-        if not isinstance(data, list):
-            continue
+            data = payload.get("data", []) if isinstance(payload, dict) else payload
+            if not isinstance(data, list):
+                break
 
-        for entry in data:
+            for entry in data:
+                try:
+                    did = int(entry.get("device_id"))
+                    if did in result:
+                        result[did].extend(entry.get("radios") or [])
+                except Exception:
+                    continue
+
+            # Next page only if the API says there is one. (Do not rely on
+            # len(data) == limit: the API returns page 1 again for page > total_pages.)
+            total_pages = payload.get("total_pages") if isinstance(payload, dict) else None
+            if total_pages is None:
+                total_pages = 1
             try:
-                did = int(entry.get("device_id"))
-                if did in result:
-                    result[did].extend(entry.get("radios") or [])
-            except Exception:
-                continue
+                if page >= int(total_pages):
+                    break
+            except (TypeError, ValueError):
+                break
 
     return result
 
@@ -1092,6 +1245,9 @@ def main():
                 f"{dev_id}|{hostname}|{host_ip}|{local_port}|{management_ip}|"
                 f"{remote_port}|{port_desc}|{mac_address}|{remote_device}"
             )
+
+    # API USAGE of this run (H1) – must be last so all calls are counted
+    print_api_usage_section()
 
     sys.exit(0)
 
